@@ -164,8 +164,9 @@ Record ID extraction:
 
 ```
 Trigger (new record): editFormHandler('TYPE') — called by sidebar links
-  Available type strings: 'A', 'AAAA', 'CNAME', 'ALIAS', 'MX', 'NS', 'TXT'
-  Additional types (SRV, CAA, etc.) via "Additional" link → unknown, needs manual check
+  Standard: 'A', 'AAAA', 'CNAME', 'ALIAS', 'MX', 'NS', 'TXT'
+  Additional: 'CAA', 'AFSDB', 'HINFO', 'RP', 'LOC', 'NAPTR', 'PTR', 'SSHFP', 'SPF', 'SRV'
+  ALL 17 types use the same form#edit_record, fields show/hide via JS
 
 Trigger (edit record): editRow(rowElement) — called by clicking a record row
 
@@ -175,23 +176,34 @@ Form: form#edit_record → POST to current zone URL (method POST)
 Hidden fields (always present):
   input[name="account"]                — session hash (set by server, do not touch)
   input[name="menu"]                   — value: "edit_zone"
-  input#_type [name="Type"]            — record type: "A", "MX", "TXT", etc.
+  input#_type [name="Type"]            — record type: "A", "MX", "SRV", etc.
   input#_zoneid [name="hosted_dns_zoneid"]   — zone ID
   input#_recordid [name="hosted_dns_recordid"] — "" for new, RECORD_ID for edit
   input[name="hosted_dns_editzone"]    — value: "1"
 
-Visible fields (type-dependent):
-  input#_name [name="Name"]            — hostname (always visible)
-  input#_content [name="Content"]      — record data (always visible, INPUT not TEXTAREA even for TXT)
-  select#_ttl [name="TTL"]             — TTL dropdown (always visible)
-    Options: 172800 (48h*), 86400 (24h), 43200 (12h), 28800 (8h), 14400 (4h),
-             7200 (2h), 3600 (1h), 1800 (30m), 900 (15m), 300 (5m)
-  input#_dynamic [name="dynamic"]      — DDNS checkbox (type="checkbox", value="1")
+Visible fields by record type (ALL content fields are INPUT type=text, never TEXTAREA):
 
-Priority field behavior:
-  input#_prio [name="Priority"]
-    — hidden (type="hidden") for: A, AAAA, CNAME, ALIAS, NS, TXT
-    — visible (type="text")  for: MX (and likely SRV)
+  STANDARD (Name + Content + TTL):
+    A, AAAA, CNAME, ALIAS, NS, CAA, HINFO, RP, LOC, NAPTR, PTR, SSHFP, SPF
+    input#_name [name="Name"], input#_content [name="Content"], select#_ttl [name="TTL"]
+
+  WITH DDNS CHECKBOX (Name + Content + TTL + dynamic):
+    A, AAAA, TXT, AFSDB
+    + input#_dynamic [name="dynamic"] (checkbox, value="1")
+
+  MX (Name + Priority + Content + TTL):
+    input#_name, input#_prio [name="Priority"] (visible text), input#_content, select#_ttl
+
+  SRV — SPECIAL (5 fields, no Content):
+    input#_name [name="Name"]
+    input#_prio [name="Priority"]
+    input#_weight [name="Weight"]
+    input#_port [name="Port"]
+    input#_target [name="Target"]
+    select#_ttl [name="TTL"]
+
+TTL select options: 172800 (48h default), 86400 (24h), 43200 (12h), 28800 (8h), 14400 (4h),
+                    7200 (2h), 3600 (1h), 1800 (30m), 900 (15m), 300 (5m)
 
 Submit: input[name="hosted_dns_editrecord"][value="Submit"] (type="submit")
 Cancel: input#btn_cancel [name="hosted_dns_editrecord_cancel"] (type="button")
@@ -232,7 +244,7 @@ Form: form[name="add_bind_zone"] → POST /index.cgi
 ## Deferred Ideas
 
 - Playwright Inspector integration into CI — Phase 4 (Production Hardening)
-- Additional record types form mapping (SRV, CAA, NAPTR, SSHFP) — Phase 3 (needs manual inspection per type)
+- BIND export curl command discovery — Phase 6 (Raw Zone panel uses undocumented endpoint)
 - BIND export via "Raw Zone" expand panel — Phase 6
 
 </deferred>
