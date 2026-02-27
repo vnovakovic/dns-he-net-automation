@@ -5,32 +5,32 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** External systems can manage DNS records on dns.he.net via a REST API as if it were a first-class DNS provider, without any manual web interaction.
-**Current focus:** Phase 1: Foundation + Browser Core
+**Current focus:** Phase 2: HTTP API Layer
 
 ## Current Position
 
-Phase: 1 of 6 (Foundation + Browser Core)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-28 -- Plan 01-02 complete
+Phase: 1 of 6 (Foundation + Browser Core) -- COMPLETE
+Plan: 3 of 3 in phase 1 (all complete)
+Status: Complete
+Last activity: 2026-02-28 -- Plan 01-03 complete, Phase 1 complete
 
-Progress: [██░░░░░░░░] 12%
+Progress: [███░░░░░░░] 17%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
+- Total plans completed: 3
 - Average duration: 8 min
-- Total execution time: 0.27 hours
+- Total execution time: 0.38 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-browser-core | 2/3 | 16 min | 8 min |
+| 01-foundation-browser-core | 3/3 | 25 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 9 min, 7 min
+- Last 5 plans: 9 min, 7 min, 9 min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -53,6 +53,8 @@ Recent decisions affecting current work:
 - [01-02]: ensureHealthy is a stub in 01-02 -- creates context+page if nil, nil-launcher safe for unit tests; real login logic deferred to 01-03
 - [01-02]: Integration tests in separate file with //go:build integration tag -- unit tests never require Chromium
 - [01-02]: playwright-go was not actually in go.mod despite 01-01 SUMMARY claiming it was -- added here as blocking dependency
+- [01-03]: WaitForLoadState requires PageWaitForLoadStateOptions{State: &loadState} struct not bare *playwright.LoadState -- playwright-go v0.5700.1 API
+- [01-03]: Integration test build tags must be at file level (//go:build integration at top of file before package) -- not at function level or test level
 
 ### Pending Todos
 
@@ -66,5 +68,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 01-02-PLAN.md (credential provider, playwright launcher, session manager, main.go wiring)
+Stopped at: Completed 01-03-PLAN.md (page objects, selector constants, ensureHealthy real implementation, live integration test passed)
 Resume file: None
