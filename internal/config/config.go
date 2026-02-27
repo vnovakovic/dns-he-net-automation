@@ -46,6 +46,10 @@ type Config struct {
 	// SessionMaxAgeSec is the maximum browser session age in seconds before proactive re-login
 	// (default: 1800 = 30 minutes).
 	SessionMaxAgeSec int `env:"SESSION_MAX_AGE_SEC" envDefault:"1800"`
+
+	// JWTSecret is the HMAC-SHA256 signing secret for JWT bearer tokens.
+	// SECURITY: Must be at least 32 characters. Never log this value (SEC-02).
+	JWTSecret string `env:"JWT_SECRET,required,notEmpty"`
 }
 
 // Load reads configuration from environment variables and returns a populated Config.
