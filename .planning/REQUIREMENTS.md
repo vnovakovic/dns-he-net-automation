@@ -192,97 +192,105 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BROWSER-01 | TBD | Pending |
-| BROWSER-02 | TBD | Pending |
-| BROWSER-03 | TBD | Pending |
-| BROWSER-04 | TBD | Pending |
-| BROWSER-05 | TBD | Pending |
-| BROWSER-06 | TBD | Pending |
-| BROWSER-07 | TBD | Pending |
-| BROWSER-08 | TBD | Pending |
-| BROWSER-09 | TBD | Pending |
-| VAULT-01 | TBD | Pending |
-| VAULT-02 | TBD | Pending |
-| VAULT-03 | TBD | Pending |
-| VAULT-04 | TBD | Pending |
-| VAULT-05 | TBD | Pending |
-| VAULT-06 | TBD | Pending |
-| ACCT-01 | TBD | Pending |
-| ACCT-02 | TBD | Pending |
-| ACCT-03 | TBD | Pending |
-| ACCT-04 | TBD | Pending |
-| TOKEN-01 | TBD | Pending |
-| TOKEN-02 | TBD | Pending |
-| TOKEN-03 | TBD | Pending |
-| TOKEN-04 | TBD | Pending |
-| TOKEN-05 | TBD | Pending |
-| TOKEN-06 | TBD | Pending |
-| TOKEN-07 | TBD | Pending |
-| ZONE-01 | TBD | Pending |
-| ZONE-02 | TBD | Pending |
-| ZONE-03 | TBD | Pending |
-| ZONE-04 | TBD | Pending |
-| REC-01 | TBD | Pending |
-| REC-02 | TBD | Pending |
-| REC-03 | TBD | Pending |
-| REC-04 | TBD | Pending |
-| REC-05 | TBD | Pending |
-| REC-06 | TBD | Pending |
-| REC-07 | TBD | Pending |
-| REC-08 | TBD | Pending |
-| REC-09 | TBD | Pending |
-| SYNC-01 | TBD | Pending |
-| SYNC-02 | TBD | Pending |
-| SYNC-03 | TBD | Pending |
-| SYNC-04 | TBD | Pending |
-| SYNC-05 | TBD | Pending |
-| SYNC-06 | TBD | Pending |
-| BIND-01 | TBD | Pending |
-| BIND-02 | TBD | Pending |
-| BIND-03 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| UI-03 | TBD | Pending |
-| UI-04 | TBD | Pending |
-| UI-05 | TBD | Pending |
-| API-01 | TBD | Pending |
-| API-02 | TBD | Pending |
-| API-03 | TBD | Pending |
-| API-04 | TBD | Pending |
-| API-05 | TBD | Pending |
-| API-06 | TBD | Pending |
-| API-07 | TBD | Pending |
-| OPS-01 | TBD | Pending |
-| OPS-02 | TBD | Pending |
-| OPS-03 | TBD | Pending |
-| OPS-04 | TBD | Pending |
-| OPS-05 | TBD | Pending |
-| OPS-06 | TBD | Pending |
-| OBS-01 | TBD | Pending |
-| OBS-02 | TBD | Pending |
-| OBS-03 | TBD | Pending |
-| RES-01 | TBD | Pending |
-| RES-02 | TBD | Pending |
-| RES-03 | TBD | Pending |
-| PERF-01 | TBD | Pending |
-| PERF-02 | TBD | Pending |
-| PERF-03 | TBD | Pending |
-| SEC-01 | TBD | Pending |
-| SEC-02 | TBD | Pending |
-| SEC-03 | TBD | Pending |
-| SEC-04 | TBD | Pending |
-| REL-01 | TBD | Pending |
-| REL-02 | TBD | Pending |
-| REL-03 | TBD | Pending |
-| COMPAT-01 | TBD | Pending |
-| COMPAT-02 | TBD | Pending |
-| COMPAT-03 | TBD | Pending |
+| BROWSER-01 | Phase 1 | Pending |
+| BROWSER-02 | Phase 1 | Pending |
+| BROWSER-03 | Phase 1 | Pending |
+| BROWSER-04 | Phase 1 | Pending |
+| BROWSER-05 | Phase 1 | Pending |
+| BROWSER-06 | Phase 1 | Pending |
+| BROWSER-07 | Phase 1 | Pending |
+| BROWSER-08 | Phase 4 | Pending |
+| BROWSER-09 | Phase 4 | Pending |
+| VAULT-01 | Phase 4 | Pending |
+| VAULT-02 | Phase 4 | Pending |
+| VAULT-03 | Phase 4 | Pending |
+| VAULT-04 | Phase 4 | Pending |
+| VAULT-05 | Phase 4 | Pending |
+| VAULT-06 | Phase 4 | Pending |
+| ACCT-01 | Phase 2 | Pending |
+| ACCT-02 | Phase 2 | Pending |
+| ACCT-03 | Phase 2 | Pending |
+| ACCT-04 | Phase 2 | Pending |
+| TOKEN-01 | Phase 2 | Pending |
+| TOKEN-02 | Phase 2 | Pending |
+| TOKEN-03 | Phase 2 | Pending |
+| TOKEN-04 | Phase 2 | Pending |
+| TOKEN-05 | Phase 2 | Pending |
+| TOKEN-06 | Phase 2 | Pending |
+| TOKEN-07 | Phase 2 | Pending |
+| ZONE-01 | Phase 3 | Pending |
+| ZONE-02 | Phase 3 | Pending |
+| ZONE-03 | Phase 3 | Pending |
+| ZONE-04 | Phase 3 | Pending |
+| REC-01 | Phase 3 | Pending |
+| REC-02 | Phase 3 | Pending |
+| REC-03 | Phase 3 | Pending |
+| REC-04 | Phase 3 | Pending |
+| REC-05 | Phase 3 | Pending |
+| REC-06 | Phase 3 | Pending |
+| REC-07 | Phase 3 | Pending |
+| REC-08 | Phase 3 | Pending |
+| REC-09 | Phase 3 | Pending |
+| SYNC-01 | Phase 5 | Pending |
+| SYNC-02 | Phase 5 | Pending |
+| SYNC-03 | Phase 5 | Pending |
+| SYNC-04 | Phase 5 | Pending |
+| SYNC-05 | Phase 5 | Pending |
+| SYNC-06 | Phase 5 | Pending |
+| BIND-01 | Phase 6 | Pending |
+| BIND-02 | Phase 6 | Pending |
+| BIND-03 | Phase 6 | Pending |
+| UI-01 | Phase 6 | Pending |
+| UI-02 | Phase 6 | Pending |
+| UI-03 | Phase 6 | Pending |
+| UI-04 | Phase 6 | Pending |
+| UI-05 | Phase 6 | Pending |
+| API-01 | Phase 2 | Pending |
+| API-02 | Phase 2 | Pending |
+| API-03 | Phase 2 | Pending |
+| API-04 | Phase 2 | Pending |
+| API-05 | Phase 3 | Pending |
+| API-06 | Phase 3 | Pending |
+| API-07 | Phase 2 | Pending |
+| OPS-01 | Phase 2 | Pending |
+| OPS-02 | Phase 2 | Pending |
+| OPS-03 | Phase 1 | Pending |
+| OPS-04 | Phase 2 | Pending |
+| OPS-05 | Phase 4 | Pending |
+| OPS-06 | Phase 1 | Pending |
+| OBS-01 | Phase 5 | Pending |
+| OBS-02 | Phase 5 | Pending |
+| OBS-03 | Phase 4 | Pending |
+| RES-01 | Phase 4 | Pending |
+| RES-02 | Phase 4 | Pending |
+| RES-03 | Phase 4 | Pending |
+| PERF-01 | Phase 3 | Pending |
+| PERF-02 | Phase 3 | Pending |
+| PERF-03 | Phase 3 | Pending |
+| SEC-01 | Phase 2 | Pending |
+| SEC-02 | Phase 2 | Pending |
+| SEC-03 | Phase 1 | Pending |
+| SEC-04 | Phase 2 | Pending |
+| REL-01 | Phase 1 | Pending |
+| REL-02 | Phase 1 | Pending |
+| REL-03 | Phase 1 | Pending |
+| COMPAT-01 | Phase 3 | Pending |
+| COMPAT-02 | Phase 3 | Pending |
+| COMPAT-03 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 76 total
-- Mapped to phases: 0
-- Unmapped: 76 (TBD -- populated during roadmap creation)
+- v1 requirements: 85 total (corrected from initial estimate of 76)
+- Mapped to phases: 85
+- Unmapped: 0
+
+**Per-phase breakdown:**
+- Phase 1: 13 requirements (BROWSER-01..07, OPS-03, OPS-06, REL-01..03, SEC-03)
+- Phase 2: 22 requirements (TOKEN-01..07, ACCT-01..04, API-01..04/07, OPS-01/02/04, SEC-01/02/04)
+- Phase 3: 21 requirements (ZONE-01..04, REC-01..09, API-05/06, PERF-01..03, COMPAT-01..03)
+- Phase 4: 13 requirements (VAULT-01..06, BROWSER-08/09, RES-01..03, OBS-03, OPS-05)
+- Phase 5: 8 requirements (OBS-01/02, SYNC-01..06)
+- Phase 6: 8 requirements (BIND-01..03, UI-01..05)
 
 ---
 *Requirements defined: 2026-02-27*
-*Last updated: 2026-02-27 after initial definition*
+*Last updated: 2026-02-27 after roadmap creation*
