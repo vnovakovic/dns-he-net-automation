@@ -26,17 +26,17 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Depends on**: Nothing (first phase)
 **Requirements**: BROWSER-01, BROWSER-02, BROWSER-03, BROWSER-04, BROWSER-05, BROWSER-06, BROWSER-07, OPS-03, OPS-06, REL-01, REL-02, REL-03, SEC-03
 **Success Criteria** (what must be TRUE):
-  1. Service launches a headless Chromium instance via Rod with Leakless mode, and no orphaned Chromium processes remain after shutdown
+  1. Service launches a headless Chromium instance via playwright-go, and no orphaned Chromium processes remain after shutdown
   2. Service can log into a dns.he.net account (credentials from env vars via a credential interface), navigate to the zone list page, and return zone data
   3. Two concurrent requests for the same account are serialized (second waits for first to complete) -- never two simultaneous browser operations per account
   4. A stale or crashed browser session is detected and automatically restarted with a fresh login before the next operation
   5. All CSS selectors and form interactions live in `internal/browser/pages/` -- no selectors exist in any other package
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Project scaffolding, Go module, config, SQLite store with goose migrations
-- [ ] 01-02: Chromium launcher, session manager with per-account mutex, credential interface
-- [ ] 01-03: HE page objects (login, zone list) and session health/recovery
+- [ ] 01-01-PLAN.md -- Go module, config, domain types, SQLite store with goose migrations, Dockerfile
+- [ ] 01-02-PLAN.md -- Credential provider interface, playwright-go launcher, session manager with per-account mutex
+- [ ] 01-03-PLAN.md -- HE page objects (login, zone list, record form for all 17 types), session health/recovery, live verification
 
 ### Phase 2: API Layer + Authentication
 **Goal**: External clients can authenticate with bearer tokens and manage accounts/tokens via a REST API, with structured logging and graceful shutdown
@@ -128,7 +128,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation + Browser Core | 0/3 | Not started | - |
+| 1. Foundation + Browser Core | 0/3 | Planned | - |
 | 2. API Layer + Authentication | 0/3 | Not started | - |
 | 3. DNS Operations | 0/3 | Not started | - |
 | 4. Production Hardening | 0/3 | Not started | - |
