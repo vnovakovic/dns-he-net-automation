@@ -1,6 +1,6 @@
 // Package main is the entry point for the dns-he-net-automation service.
-// It loads configuration, initializes the SQLite database, and handles OS signals
-// for graceful shutdown.
+// It loads configuration, initializes the SQLite database, starts the Playwright browser,
+// and handles OS signals for graceful shutdown.
 package main
 
 import (
@@ -9,8 +9,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/config"
+	"github.com/vnovakov/dns-he-net-automation/internal/credential"
 	"github.com/vnovakov/dns-he-net-automation/internal/store"
 )
 
@@ -56,11 +59,45 @@ func main() {
 
 	slog.Info("database ready", "db_path", cfg.DBPath)
 
+	// Initialize credential provider from HE_ACCOUNTS JSON env var.
+	// SECURITY (SEC-03): We log account IDs only, never usernames or passwords.
+	credProvider, err := credential.NewEnvProvider(cfg.HEAccountsJSON)
+	if err != nil {
+		slog.Error("failed to initialize credential provider", "error", err)
+		os.Exit(1)
+	}
+
+	ids, err := credProvider.ListAccountIDs(context.Background())
+	if err != nil {
+		slog.Error("failed to list account IDs", "error", err)
+		os.Exit(1)
+	}
+	// Log account IDs only -- never log usernames or passwords (SEC-03).
+	slog.Info("accounts loaded", "count", len(ids), "ids", ids)
+
+	// Initialize Playwright browser launcher (BROWSER-01).
+	launcher, err := browser.NewLauncher(cfg.PlaywrightHeadless, cfg.PlaywrightSlowMo)
+	if err != nil {
+		slog.Error("failed to launch browser", "error", err)
+		os.Exit(1)
+	}
+	// Close browser BEFORE the signal wait so defer executes on both normal exit and signal.
+	defer launcher.Close()
+
+	// Build session manager durations from config int/float fields.
+	queueTimeout := time.Duration(cfg.OperationQueueTimeoutSec) * time.Second
+	opTimeout := time.Duration(cfg.OperationTimeoutSec) * time.Second
+	reloginAge := time.Duration(cfg.SessionMaxAgeSec) * time.Second
+	minOpDelay := time.Duration(cfg.MinOperationDelaySec * float64(time.Second))
+
+	// Create session manager with per-account mutex serialization (REL-02, REL-03).
+	sm := browser.NewSessionManager(launcher, credProvider, queueTimeout, opTimeout, reloginAge, minOpDelay)
+	defer sm.Close()
+
 	// Set up OS signal handling for graceful shutdown (SIGTERM for Docker/k8s, SIGINT for Ctrl+C).
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	// TODO (Plan 01-02): Initialize Playwright browser and session manager here.
 	// TODO (Phase 2): Start HTTP API server here.
 
 	slog.Info("service ready, waiting for requests or shutdown signal",
