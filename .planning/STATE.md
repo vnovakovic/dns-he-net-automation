@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 ## Current Position
 
-Phase: 1 of 6 (Foundation + Browser Core) -- COMPLETE
-Plan: 3 of 3 in phase 1 (all complete)
-Status: Complete
-Last activity: 2026-02-28 -- Plan 01-03 complete, Phase 1 complete
+Phase: 2 of 6 (HTTP API Layer)
+Plan: 1 of 5 in phase 2 (02-01 complete)
+Status: In Progress
+Last activity: 2026-02-27 -- Plan 02-01 complete, token package + migration
 
-Progress: [███░░░░░░░] 17%
+Progress: [████░░░░░░] 23%
 
 ## Performance Metrics
 
@@ -28,9 +28,10 @@ Progress: [███░░░░░░░] 17%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-browser-core | 3/3 | 25 min | 8 min |
+| 02-api-auth | 1/5 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 9 min, 7 min, 9 min
+- Last 5 plans: 9 min, 7 min, 9 min, 4 min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -55,6 +56,9 @@ Recent decisions affecting current work:
 - [01-02]: playwright-go was not actually in go.mod despite 01-01 SUMMARY claiming it was -- added here as blocking dependency
 - [01-03]: WaitForLoadState requires PageWaitForLoadStateOptions{State: &loadState} struct not bare *playwright.LoadState -- playwright-go v0.5700.1 API
 - [01-03]: Integration test build tags must be at file level (//go:build integration at top of file before package) -- not at function level or test level
+- [02-01]: TestListTokens uses direct INSERT with datetime('-1 hour') for older token -- SQLite CURRENT_TIMESTAMP has 1-second resolution, two rapid IssueToken calls produce same created_at and non-deterministic ORDER BY DESC
+- [02-01]: hashToken unexported helper shared by IssueToken and ValidateToken -- single source of truth for SHA-256 hex encoding
+- [02-01]: RevokeToken scopes UPDATE to account_id as well as jti -- prevents cross-account token revocation
 
 ### Pending Todos
 
@@ -67,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-28
-Stopped at: Completed 01-03-PLAN.md (page objects, selector constants, ensureHealthy real implementation, live integration test passed)
+Last session: 2026-02-27
+Stopped at: Completed 02-01-PLAN.md (JWT token package: IssueToken/ValidateToken/RevokeToken/ListTokens, 002_tokens.sql migration, JWTSecret in config)
 Resume file: None

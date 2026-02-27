@@ -12,7 +12,7 @@ This roadmap delivers a Go REST API that wraps dns.he.net's web interface via he
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation + Browser Core** - Project scaffolding, Chromium lifecycle, HE login/session management, page-object layer, per-account mutex, SQLite schema
+- [x] **Phase 1: Foundation + Browser Core** - Project scaffolding, Chromium lifecycle, HE login/session management, page-object layer, per-account mutex, SQLite schema
 - [ ] **Phase 2: API Layer + Authentication** - chi router, bearer token system, auth middleware, account/token management endpoints, health check, structured logging
 - [ ] **Phase 3: DNS Operations** - Zone CRUD, record CRUD for all v1 types (A, AAAA, CNAME, MX, TXT, SRV, CAA, NS), idempotency, field validation
 - [ ] **Phase 4: Production Hardening** - Vault credential storage, retry/backoff/circuit breaker, rate limiting, debug screenshots, Docker image, binary builds
@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md -- Go module, config, domain types, SQLite store with goose migrations, Dockerfile
 - [x] 01-02-PLAN.md -- Credential provider interface, playwright-go launcher, session manager with per-account mutex
-- [ ] 01-03-PLAN.md -- HE page objects (login, zone list, record form for all 17 types), session health/recovery, live verification
+- [x] 01-03-PLAN.md -- HE page objects (login, zone list, record form for all 17 types), session health/recovery, live verification
 
 ### Phase 2: API Layer + Authentication
 **Goal**: External clients can authenticate with bearer tokens and manage accounts/tokens via a REST API, with structured logging and graceful shutdown
@@ -51,7 +51,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 02-01: Bearer token system (issuance, hashing, validation, revocation) and SQLite token store
+- [x] 02-01: Bearer token system (issuance, hashing, validation, revocation) and SQLite token store
 - [ ] 02-02: chi router, auth middleware, account management endpoints, token management endpoints
 - [ ] 02-03: Health endpoint, structured logging, graceful shutdown, error response contract
 

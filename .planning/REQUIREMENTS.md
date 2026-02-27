@@ -37,13 +37,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Token Management (Authentication)
 
-- [ ] **TOKEN-01**: Operator can issue a bearer token scoped to a specific account with a role of `admin` or `viewer`
-- [ ] **TOKEN-02**: Tokens are cryptographically random (32 bytes), displayed once at creation, and stored in SQLite as a SHA-256 hash — the plaintext is never persisted
-- [ ] **TOKEN-03**: Multiple tokens can be issued per account, each with an optional human-readable label
-- [ ] **TOKEN-04**: Tokens can have an optional expiry date (`expires_at`); expired tokens are rejected by the auth middleware
-- [ ] **TOKEN-05**: Tokens can be revoked by ID; revoked tokens are immediately rejected on the next request
-- [ ] **TOKEN-06**: Operator can list all tokens for an account (showing label, role, created/expires/revoked dates, but never the token value)
-- [ ] **TOKEN-07**: `viewer` role tokens can only perform read operations (GET); `admin` role tokens can perform all operations (GET, POST, PUT, DELETE)
+- [x] **TOKEN-01**: Operator can issue a bearer token scoped to a specific account with a role of `admin` or `viewer`
+- [x] **TOKEN-02**: Tokens are cryptographically random (32 bytes), displayed once at creation, and stored in SQLite as a SHA-256 hash — the plaintext is never persisted
+- [x] **TOKEN-03**: Multiple tokens can be issued per account, each with an optional human-readable label
+- [x] **TOKEN-04**: Tokens can have an optional expiry date (`expires_at`); expired tokens are rejected by the auth middleware
+- [x] **TOKEN-05**: Tokens can be revoked by ID; revoked tokens are immediately rejected on the next request
+- [x] **TOKEN-06**: Operator can list all tokens for an account (showing label, role, created/expires/revoked dates, but never the token value)
+- [x] **TOKEN-07**: `viewer` role tokens can only perform read operations (GET); `admin` role tokens can perform all operations (GET, POST, PUT, DELETE)
 
 ### Zone Operations
 
@@ -129,7 +129,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Security
 
 - [ ] **SEC-01**: dns.he.net credentials never appear in SQLite, logs, API responses, or error messages — they exist only in Vault and transiently in memory
-- [ ] **SEC-02**: Bearer tokens are stored as SHA-256 hashes in SQLite; the plaintext token is returned only at creation time
+- [x] **SEC-02**: Bearer tokens are stored as SHA-256 hashes in SQLite; the plaintext token is returned only at creation time
 - [x] **SEC-03**: The SQLite database file permissions are set to 0600 (owner read/write only)
 - [ ] **SEC-04**: All API input is validated and sanitized before use in browser form fields to prevent injection into dns.he.net forms
 
@@ -211,13 +211,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACCT-02 | Phase 2 | Pending |
 | ACCT-03 | Phase 2 | Pending |
 | ACCT-04 | Phase 2 | Pending |
-| TOKEN-01 | Phase 2 | Pending |
-| TOKEN-02 | Phase 2 | Pending |
-| TOKEN-03 | Phase 2 | Pending |
-| TOKEN-04 | Phase 2 | Pending |
-| TOKEN-05 | Phase 2 | Pending |
-| TOKEN-06 | Phase 2 | Pending |
-| TOKEN-07 | Phase 2 | Pending |
+| TOKEN-01 | Phase 2 | Complete |
+| TOKEN-02 | Phase 2 | Complete |
+| TOKEN-03 | Phase 2 | Complete |
+| TOKEN-04 | Phase 2 | Complete |
+| TOKEN-05 | Phase 2 | Complete |
+| TOKEN-06 | Phase 2 | Complete |
+| TOKEN-07 | Phase 2 | Complete |
 | ZONE-01 | Phase 3 | Pending |
 | ZONE-02 | Phase 3 | Pending |
 | ZONE-03 | Phase 3 | Pending |
@@ -268,7 +268,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PERF-02 | Phase 3 | Pending |
 | PERF-03 | Phase 3 | Pending |
 | SEC-01 | Phase 2 | Pending |
-| SEC-02 | Phase 2 | Pending |
+| SEC-02 | Phase 2 | Complete |
 | SEC-03 | Phase 1 | Complete (01-01) |
 | SEC-04 | Phase 2 | Pending |
 | REL-01 | Phase 1 | Complete (01-01) |
