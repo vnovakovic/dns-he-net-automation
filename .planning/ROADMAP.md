@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01-PLAN.md -- Go module, config, domain types, SQLite store with goose migrations, Dockerfile
-- [ ] 01-02-PLAN.md -- Credential provider interface, playwright-go launcher, session manager with per-account mutex
+- [x] 01-02-PLAN.md -- Credential provider interface, playwright-go launcher, session manager with per-account mutex
 - [ ] 01-03-PLAN.md -- HE page objects (login, zone list, record form for all 17 types), session health/recovery, live verification
 
 ### Phase 2: API Layer + Authentication
@@ -128,7 +128,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation + Browser Core | 1/3 | In progress | - |
+| 1. Foundation + Browser Core | 2/3 | In progress | - |
 | 2. API Layer + Authentication | 0/3 | Not started | - |
 | 3. DNS Operations | 0/3 | Not started | - |
 | 4. Production Hardening | 0/3 | Not started | - |

@@ -9,12 +9,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Browser Automation Core
 
-- [ ] **BROWSER-01**: Service can launch a headless Chromium instance via Rod with Leakless mode enabled, preventing orphaned processes
+- [x] **BROWSER-01**: Service can launch a headless Chromium instance via Rod with Leakless mode enabled, preventing orphaned processes
 - [ ] **BROWSER-02**: Service can log into a dns.he.net account using credentials fetched from Vault at runtime
-- [ ] **BROWSER-03**: Browser sessions are isolated per dns.he.net account (separate incognito contexts or separate processes, no cookie cross-contamination)
-- [ ] **BROWSER-04**: All browser operations for a given account are serialized via a per-account mutex — concurrent requests queue rather than race
+- [x] **BROWSER-03**: Browser sessions are isolated per dns.he.net account (separate incognito contexts or separate processes, no cookie cross-contamination)
+- [x] **BROWSER-04**: All browser operations for a given account are serialized via a per-account mutex — concurrent requests queue rather than race
 - [ ] **BROWSER-05**: Browser sessions detect stale/expired state and automatically re-authenticate before the next operation
-- [ ] **BROWSER-06**: Every browser operation has a configurable timeout (default 30s) — a hung page does not block the account queue indefinitely
+- [x] **BROWSER-06**: Every browser operation has a configurable timeout (default 30s) — a hung page does not block the account queue indefinitely
 - [ ] **BROWSER-07**: All CSS selectors and form interactions are encapsulated in page-object files under `internal/browser/pages/` — no selectors leak into handlers or service code
 - [ ] **BROWSER-08**: Configurable inter-operation delay with jitter (default 2-3s range) to avoid triggering dns.he.net rate limiting or bot detection
 - [ ] **BROWSER-09**: On fatal browser error (crash, unrecoverable state), the session is automatically restarted with a fresh Chromium context and re-login
@@ -136,8 +136,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Reliability
 
 - [x] **REL-01**: SQLite uses WAL journal mode with `busy_timeout=5000` and `foreign_keys=ON` for concurrent read safety and data integrity
-- [ ] **REL-02**: Chromium processes are launched with `Leakless(true)` and a watchdog goroutine detects and kills orphaned processes
-- [ ] **REL-03**: The service can be restarted cleanly and resume operation — no persistent browser state is required across restarts
+- [x] **REL-02**: Chromium processes are launched with `Leakless(true)` and a watchdog goroutine detects and kills orphaned processes
+- [x] **REL-03**: The service can be restarted cleanly and resume operation — no persistent browser state is required across restarts
 
 ### Compatibility
 
@@ -192,12 +192,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BROWSER-01 | Phase 1 | Pending |
+| BROWSER-01 | Phase 1 | Complete (01-02) |
 | BROWSER-02 | Phase 1 | Pending |
-| BROWSER-03 | Phase 1 | Pending |
-| BROWSER-04 | Phase 1 | Pending |
+| BROWSER-03 | Phase 1 | Complete (01-02) |
+| BROWSER-04 | Phase 1 | Complete (01-02) |
 | BROWSER-05 | Phase 1 | Pending |
-| BROWSER-06 | Phase 1 | Pending |
+| BROWSER-06 | Phase 1 | Complete (01-02) |
 | BROWSER-07 | Phase 1 | Pending |
 | BROWSER-08 | Phase 4 | Pending |
 | BROWSER-09 | Phase 4 | Pending |
@@ -272,8 +272,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-03 | Phase 1 | Complete (01-01) |
 | SEC-04 | Phase 2 | Pending |
 | REL-01 | Phase 1 | Complete (01-01) |
-| REL-02 | Phase 1 | Pending |
-| REL-03 | Phase 1 | Pending |
+| REL-02 | Phase 1 | Complete (01-02) |
+| REL-03 | Phase 1 | Complete (01-02) |
 | COMPAT-01 | Phase 3 | Pending |
 | COMPAT-02 | Phase 3 | Pending |
 | COMPAT-03 | Phase 3 | Pending |
