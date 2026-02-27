@@ -1,0 +1,22 @@
+# Go build artifacts
+/server
+/bin/
+
+# SQLite database files (contain production data)
+*.db
+*.db-wal
+*.db-shm
+
+# Environment files (contain credentials)
+.env
+.env.*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Test output
+/coverage.out
+/coverage.html
