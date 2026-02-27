@@ -101,10 +101,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **OPS-01**: `GET /healthz` returns 200 with a JSON body reporting: service status, browser pool status (sessions active/idle), Vault connectivity status, SQLite connectivity
 - [ ] **OPS-02**: All log output uses Go `log/slog` in structured JSON format with request ID, account ID, operation type, and duration fields
-- [ ] **OPS-03**: Configuration is loaded from environment variables with an optional YAML/TOML config file; env vars take precedence (12-factor)
+- [x] **OPS-03**: Configuration is loaded from environment variables with an optional YAML/TOML config file; env vars take precedence (12-factor)
 - [ ] **OPS-04**: Service handles SIGTERM/SIGINT gracefully: stops accepting new requests, drains in-flight browser operations (with timeout), closes all browser sessions, closes SQLite, then exits
 - [ ] **OPS-05**: Service ships as a single static Go binary and as a Docker image based on `chromedp/headless-shell` (~150MB)
-- [ ] **OPS-06**: SQLite database schema is managed by embedded SQL migrations via `pressly/goose` v3, run automatically at startup
+- [x] **OPS-06**: SQLite database schema is managed by embedded SQL migrations via `pressly/goose` v3, run automatically at startup
 
 ### Observability
 
@@ -130,12 +130,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **SEC-01**: dns.he.net credentials never appear in SQLite, logs, API responses, or error messages — they exist only in Vault and transiently in memory
 - [ ] **SEC-02**: Bearer tokens are stored as SHA-256 hashes in SQLite; the plaintext token is returned only at creation time
-- [ ] **SEC-03**: The SQLite database file permissions are set to 0600 (owner read/write only)
+- [x] **SEC-03**: The SQLite database file permissions are set to 0600 (owner read/write only)
 - [ ] **SEC-04**: All API input is validated and sanitized before use in browser form fields to prevent injection into dns.he.net forms
 
 ### Reliability
 
-- [ ] **REL-01**: SQLite uses WAL journal mode with `busy_timeout=5000` and `foreign_keys=ON` for concurrent read safety and data integrity
+- [x] **REL-01**: SQLite uses WAL journal mode with `busy_timeout=5000` and `foreign_keys=ON` for concurrent read safety and data integrity
 - [ ] **REL-02**: Chromium processes are launched with `Leakless(true)` and a watchdog goroutine detects and kills orphaned processes
 - [ ] **REL-03**: The service can be restarted cleanly and resume operation — no persistent browser state is required across restarts
 
@@ -254,10 +254,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-07 | Phase 2 | Pending |
 | OPS-01 | Phase 2 | Pending |
 | OPS-02 | Phase 2 | Pending |
-| OPS-03 | Phase 1 | Pending |
+| OPS-03 | Phase 1 | Complete (01-01) |
 | OPS-04 | Phase 2 | Pending |
 | OPS-05 | Phase 4 | Pending |
-| OPS-06 | Phase 1 | Pending |
+| OPS-06 | Phase 1 | Complete (01-01) |
 | OBS-01 | Phase 5 | Pending |
 | OBS-02 | Phase 5 | Pending |
 | OBS-03 | Phase 4 | Pending |
@@ -269,9 +269,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PERF-03 | Phase 3 | Pending |
 | SEC-01 | Phase 2 | Pending |
 | SEC-02 | Phase 2 | Pending |
-| SEC-03 | Phase 1 | Pending |
+| SEC-03 | Phase 1 | Complete (01-01) |
 | SEC-04 | Phase 2 | Pending |
-| REL-01 | Phase 1 | Pending |
+| REL-01 | Phase 1 | Complete (01-01) |
 | REL-02 | Phase 1 | Pending |
 | REL-03 | Phase 1 | Pending |
 | COMPAT-01 | Phase 3 | Pending |
@@ -293,4 +293,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-27*
-*Last updated: 2026-02-27 after roadmap creation*
+*Last updated: 2026-02-27 after plan 01-01 completion (OPS-03, OPS-06, REL-01, SEC-03 completed)*

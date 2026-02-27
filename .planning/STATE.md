@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 1 of 6 (Foundation + Browser Core)
-Plan: 0 of 3 in current phase
-Status: Ready to plan
-Last activity: 2026-02-27 -- Roadmap created
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-27 -- Plan 01-01 complete
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 6%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 9 min
+- Total execution time: 0.15 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-foundation-browser-core | 1/3 | 9 min | 9 min |
 
 **Recent Trend:**
-- Last 5 plans: -
-- Trend: -
+- Last 5 plans: 9 min
+- Trend: Baseline established
 
 *Updated after each plan completion*
 
@@ -45,18 +45,22 @@ Recent decisions affecting current work:
 - [Roadmap]: Browser core is Phase 1 (highest risk, must de-risk before API work)
 - [Roadmap]: Vault integration deferred to Phase 4 (use env-var credential interface in Phase 1-3)
 - [Roadmap]: Six phases at standard depth -- derived from requirement dependencies, not imposed
+- [01-01]: Use required+notEmpty tags on HE_ACCOUNTS (required alone only checks env var existence, notEmpty catches empty string)
+- [01-01]: WAL mode test requires temp file database (in-memory databases always use "memory" journal mode)
+- [01-01]: DB file created via os.OpenFile before sql.Open to ensure 0600 permissions set before SQLite creates WAL sidecars
+- [01-01]: Upgraded go.mod to 1.25 (forced by goose v3.27.0 minimum requirement)
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-- [Phase 1]: dns.he.net HTML structure is unknown -- must inspect live site before writing selectors (RESEARCH FLAG from SUMMARY.md)
-- [Phase 1]: HE session expiry timing is undocumented -- start with 15-minute assumption, tune empirically
+- [Phase 1]: HE session expiry timing is undocumented -- start with 30-minute assumption (CONTEXT.md), tune empirically
+- RESOLVED [Phase 1]: dns.he.net HTML structure -- verified via Playwright MCP (all selectors in CONTEXT.md)
 
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Roadmap created, ready for Phase 1 planning
+Stopped at: Completed 01-01-PLAN.md (Go foundation: module, config, types, SQLite store, main.go)
 Resume file: None
