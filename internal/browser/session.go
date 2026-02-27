@@ -8,6 +8,7 @@ import (
 	"time"
 
 	playwright "github.com/playwright-community/playwright-go"
+	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
 	"github.com/vnovakov/dns-he-net-automation/internal/credential"
 )
 
@@ -43,10 +44,10 @@ type SessionManager struct {
 
 // NewSessionManager creates a SessionManager.
 //   - launcher: manages browser context creation
-//   - credProvider: retrieves credentials for ensureHealthy (used in plan 01-03)
+//   - credProvider: retrieves credentials for ensureHealthy
 //   - queueTimeout: max wait time to acquire per-account mutex; returns ErrQueueTimeout
 //   - opTimeout: context timeout for the operation function
-//   - reloginAge: max session age before proactive re-login (used in plan 01-03)
+//   - reloginAge: max session age before proactive re-login
 //   - minOpDelay: minimum delay between operations on the same account
 func NewSessionManager(
 	launcher *Launcher,
@@ -149,7 +150,7 @@ func (sm *SessionManager) WithAccount(ctx context.Context, accountID string, op 
 	opCtx, cancel := context.WithTimeout(ctx, sm.opTimeout)
 	defer cancel()
 
-	// Ensure the session is healthy (stub in 01-02; login logic added in 01-03).
+	// Ensure the session is healthy before running the operation.
 	if err := sm.ensureHealthy(opCtx, session); err != nil {
 		return fmt.Errorf("%w: %w", ErrSessionUnhealthy, err)
 	}
@@ -170,47 +171,158 @@ func (sm *SessionManager) WithAccount(ctx context.Context, accountID string, op 
 	return op(session.page)
 }
 
-// ensureHealthy ensures the account session has a valid browser context and page.
+// createBrowserSession creates a new BrowserContext + Page and logs in to dns.he.net.
+// On success, it updates session.ctx, session.page, session.lastLogin, session.healthy.
+// On failure, it cleans up any partially-created resources.
 //
-// STUB (Plan 01-02): Creates a new context+page if ctx or page is nil/unhealthy.
-// Actual health check logic (login verification, re-login) is added in Plan 01-03
-// when page objects exist.
+// SECURITY (SEC-03): Credentials are never included in error messages or log entries.
+// Must be called with session.mu held.
+func (sm *SessionManager) createBrowserSession(ctx context.Context, session *AccountSession) error {
+	opTimeoutMs := float64(sm.opTimeout.Milliseconds())
+
+	browserCtx, err := sm.launcher.NewAccountContext(opTimeoutMs)
+	if err != nil {
+		return fmt.Errorf("create browser context for account %q: %w", session.accountID, err)
+	}
+
+	page, err := browserCtx.NewPage()
+	if err != nil {
+		browserCtx.Close() //nolint:errcheck
+		return fmt.Errorf("create page for account %q: %w", session.accountID, err)
+	}
+
+	cred, err := sm.credProvider.GetCredential(ctx, session.accountID)
+	if err != nil {
+		browserCtx.Close() //nolint:errcheck
+		return fmt.Errorf("get credential for account %q: %w", session.accountID, err)
+	}
+
+	// SEC-03: log accountID only, never password.
+	if err := pages.NewLoginPage(page).Login(cred.Username, cred.Password); err != nil {
+		browserCtx.Close() //nolint:errcheck
+		return fmt.Errorf("login for account %q: %w", session.accountID, err)
+	}
+
+	session.ctx = browserCtx
+	session.page = page
+	session.lastLogin = time.Now()
+	session.healthy = true
+	return nil
+}
+
+// closeBrowserContext closes the BrowserContext associated with the session, if any,
+// and clears session.ctx and session.page. Must be called with session.mu held.
+func (sm *SessionManager) closeBrowserContext(session *AccountSession) {
+	if session.ctx != nil {
+		session.ctx.Close() //nolint:errcheck
+		session.ctx = nil
+		session.page = nil
+	}
+}
+
+// ensureHealthy ensures the account session has a valid, authenticated browser context.
 //
+// Four cases handled:
+//  1. No context (session.ctx == nil): create a fresh context and log in.
+//  2. Aged out (lastLogin older than reloginAge): close old context, create fresh, re-login.
+//  3. Health check fails (IsLoggedIn returns false or error): close old context, recover.
+//     If recovery fails, return a wrapped ErrSessionUnhealthy.
+//  4. Healthy: no-op, return nil.
+//
+// Unit-test escape hatch: if sm.launcher == nil, mark healthy without a real browser.
 // Must be called with session.mu held.
 func (sm *SessionManager) ensureHealthy(ctx context.Context, session *AccountSession) error {
-	if session.ctx == nil || !session.healthy {
-		slog.Info("creating new session", "account", session.accountID)
-
-		if sm.launcher == nil {
-			// Allow unit tests to run without a real launcher.
-			// In production this should not happen; the launcher is always set.
-			slog.Warn("launcher is nil, session will have no browser context", "account", session.accountID)
-			session.healthy = true
-			return nil
-		}
-
-		// Create an isolated browser context for this account.
-		opTimeoutMs := float64(sm.opTimeout.Milliseconds())
-		browserCtx, err := sm.launcher.NewAccountContext(opTimeoutMs)
-		if err != nil {
-			return fmt.Errorf("create browser context for account %q: %w", session.accountID, err)
-		}
-
-		// Create the active page within this context.
-		page, err := browserCtx.NewPage()
-		if err != nil {
-			browserCtx.Close() //nolint:errcheck
-			return fmt.Errorf("create page for account %q: %w", session.accountID, err)
-		}
-
-		session.ctx = browserCtx
-		session.page = page
+	// Unit-test escape hatch: no launcher means no real browser.
+	if sm.launcher == nil {
+		slog.Warn("launcher is nil, session will have no browser context", "account", session.accountID)
 		session.healthy = true
 		return nil
 	}
 
+	// Case 1: No context — first use of this session.
+	if session.ctx == nil {
+		slog.Info("new session created", "account", session.accountID)
+		if err := sm.createBrowserSession(ctx, session); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Case 2: Session has aged out — close and re-login proactively.
+	if time.Since(session.lastLogin) > sm.reloginAge {
+		slog.Info("session aged out, re-logging in", "account", session.accountID)
+		sm.closeBrowserContext(session)
+		session.healthy = false
+		if err := sm.createBrowserSession(ctx, session); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Case 3: Health check — verify the session cookie is still valid.
+	loggedIn, err := pages.NewLoginPage(session.page).IsLoggedIn()
+	if err != nil || !loggedIn {
+		slog.Info("session unhealthy, recovering", "account", session.accountID)
+		sm.closeBrowserContext(session)
+		session.healthy = false
+		if recoveryErr := sm.createBrowserSession(ctx, session); recoveryErr != nil {
+			return fmt.Errorf("recovery failed: %w", ErrSessionUnhealthy)
+		}
+		return nil
+	}
+
+	// Case 4: Session is healthy.
 	slog.Debug("session healthy", "account", session.accountID)
 	return nil
+}
+
+// ForceRelogin forces a fresh browser session for the given account, discarding any
+// cached session state and immediately re-establishing authentication.
+// This is useful when an external caller knows the session is stale (e.g., after a
+// password rotation).
+//
+// ForceRelogin acquires the per-account mutex with the configured queue timeout,
+// closes the existing browser context, and creates a new one with a fresh login.
+func (sm *SessionManager) ForceRelogin(ctx context.Context, accountID string) error {
+	session := sm.getOrCreateSession(accountID)
+
+	acquired := make(chan struct{})
+	done := make(chan struct{})
+
+	go func() {
+		session.mu.Lock()
+		select {
+		case acquired <- struct{}{}:
+		case <-done:
+			session.mu.Unlock()
+		}
+	}()
+
+	select {
+	case <-acquired:
+		defer session.mu.Unlock()
+	case <-time.After(sm.queueTimeout):
+		close(done)
+		return ErrQueueTimeout
+	case <-ctx.Done():
+		close(done)
+		return ctx.Err()
+	}
+
+	opCtx, cancel := context.WithTimeout(ctx, sm.opTimeout)
+	defer cancel()
+
+	slog.Info("forcing re-login", "account", accountID)
+	sm.closeBrowserContext(session)
+	session.healthy = false
+
+	if sm.launcher == nil {
+		// Unit-test escape hatch.
+		session.healthy = true
+		return nil
+	}
+
+	return sm.createBrowserSession(opCtx, session)
 }
 
 // Close closes all browser contexts and clears the session map.
