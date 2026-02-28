@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/vnovakov/dns-he-net-automation/internal/api/admin"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/handlers"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/middleware"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
@@ -26,16 +27,23 @@ import (
 //   - GET /metrics — Prometheus metrics endpoint, unauthenticated (OBS-01)
 //   - /api/v1/* — all require JWT bearer authentication (BearerAuth middleware)
 //   - POST/DELETE mutations additionally require admin role (RequireAdmin middleware)
+//   - GET /{zoneID}/export — BIND zone file export (admin only, BIND-01)
+//   - POST /{zoneID}/import — BIND zone file import, additive-only (admin only, BIND-02/03)
+//   - /admin/* — admin UI with Basic Auth + session cookie (UI-01, UI-04)
 //
 // Middleware order:
 //   - GlobalRateLimit applied before BearerAuth (DDoS protection layer — research Pitfall 4)
 //   - PrometheusMiddleware applied globally to all routes after panic recovery
 //   - PerTokenRateLimit applied after BearerAuth (needs token identity from auth)
+//
+// Admin UI parameters are passed through to RegisterAdminRoutes. This function is updated
+// exactly ONCE in plan 02 — plans 03 and 04 do not change this signature. (Checker issue 5 fix)
 func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launcher,
 	secret []byte, breakers *resilience.BreakerRegistry,
 	globalRPM, perTokenRPM int,
 	vaultHealthFn func() string,
-	reg *metrics.Registry) http.Handler {
+	reg *metrics.Registry,
+	adminUsername, adminPassword, adminSessionKey string) http.Handler {
 	r := chi.NewRouter()
 
 	// Global rate limit — registered first, before auth, for DDoS protection (RES-03).
@@ -118,6 +126,12 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 
 			r.Route("/{zoneID}", func(r chi.Router) {
 				r.With(middleware.RequireAdmin).Post("/sync", handlers.SyncRecords(db, sm, breakers, reg))
+				// BIND export/import routes (BIND-01, BIND-02, BIND-03).
+				// GET /export: scrapes live records and returns BIND zone file (text/plain, attachment).
+				// POST /import: accepts BIND zone file, applies additive-only sync (plan.Delete = nil).
+				// Both require admin role — they trigger browser automation against dns.he.net.
+				r.With(middleware.RequireAdmin).Get("/export", handlers.ExportZone(db, sm, breakers))
+				r.With(middleware.RequireAdmin).Post("/import", handlers.ImportZone(db, sm, breakers))
 
 				r.Route("/records", func(r chi.Router) {
 					r.Get("/", handlers.ListRecords(db, sm, breakers))
@@ -131,6 +145,12 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 			})
 		})
 	})
+
+	// Admin UI — mounted at /admin (UI-01).
+	// Auth (Basic Auth + HMAC-SHA256 session cookie) is handled inside RegisterAdminRoutes
+	// via the AdminAuth middleware. The full dependency set is passed here; stub handlers
+	// ignore unused params until plan 03/04 fills them in.
+	admin.RegisterAdminRoutes(r, db, sm, breakers, secret, adminUsername, adminPassword, adminSessionKey)
 
 	return r
 }

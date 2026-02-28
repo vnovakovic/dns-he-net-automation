@@ -1,0 +1,63 @@
+package templates
+
+// PageData carries common data passed to every page component.
+// All admin page handlers populate this struct before calling templ components.
+type PageData struct {
+	Title      string
+	ActivePage string // "accounts", "tokens", "zones", "sync", "audit"
+}
+
+// Layout is the base HTML template wrapping all admin pages.
+// Renders the sidebar, top bar header, and a content slot for child components.
+//
+// WHY children... slot (templ composition pattern):
+//   Avoids copy-pasting the sidebar/header HTML into every page component.
+//   templ guarantees type-safe composition at compile time (no text/template runtime errors).
+//
+// WHY <link> and <script> point to /admin/static/ (embedded, not CDN):
+//   The binary is self-contained — no internet dependency at runtime. Works in air-gapped
+//   environments. The go:embed in static.go serves these from the binary. (UI-05)
+templ Layout(data PageData) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ data.Title } | DNS Admin</title>
+			<link rel="stylesheet" href="/admin/static/admin.css"/>
+			<script src="/admin/static/htmx.min.js" defer></script>
+		</head>
+		<body class="app-shell">
+			<nav class="sidebar">
+				<div class="sidebar-logo">DNS Admin</div>
+				@NavLink("/admin/accounts", "Accounts", data.ActivePage == "accounts")
+				@NavLink("/admin/tokens", "Tokens", data.ActivePage == "tokens")
+				@NavLink("/admin/zones", "Zones", data.ActivePage == "zones")
+				@NavLink("/admin/sync", "Sync", data.ActivePage == "sync")
+				@NavLink("/admin/audit", "Audit Log", data.ActivePage == "audit")
+				<div class="sidebar-footer">
+					<a href="/admin/logout" class="nav-link">Logout</a>
+				</div>
+			</nav>
+			<div class="page-wrapper">
+				<header class="top-bar">
+					<span class="top-bar-title">{ data.Title }</span>
+				</header>
+				<main class="main-content">
+					{ children... }
+				</main>
+			</div>
+		</body>
+	</html>
+}
+
+// NavLink renders a sidebar navigation link with active state styling.
+// Separating active/inactive into two branches avoids a runtime conditional attribute
+// on class — templ prefers explicit branching for clarity and XSS safety.
+templ NavLink(href, label string, active bool) {
+	if active {
+		<a href={ templ.SafeURL(href) } class="nav-link nav-link-active">{ label }</a>
+	} else {
+		<a href={ templ.SafeURL(href) } class="nav-link">{ label }</a>
+	}
+}

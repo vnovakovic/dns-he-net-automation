@@ -170,8 +170,12 @@ func main() {
 	defer stop()
 
 	// Wire chi router and start HTTP server (Phase 2).
+	// Admin UI credentials are passed here and threaded into RegisterAdminRoutes.
+	// This is the SINGLE point where admin config enters the router — plans 03 and 04
+	// do not need to change main.go or the NewRouter signature. (UI-01, Checker issue 5 fix)
 	handler := api.NewRouter(db, sm, launcher, []byte(cfg.JWTSecret), breakers,
-		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn, reg)
+		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn, reg,
+		cfg.AdminUsername, cfg.AdminPassword, cfg.AdminSessionKey)
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: handler,
