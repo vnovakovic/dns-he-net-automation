@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 5 of 6 (Observability and Sync Engine)
-Plan: 5 of 5 in phase 5 (05-02 complete — HTTP middleware instrumentation + browser op metrics)
-Status: In Progress
-Last activity: 2026-02-28 -- Plan 05-02 complete: PrometheusMiddleware (RoutePattern labels), /metrics route, WithAccount opType, QueueDepth/ActiveSessions/BrowserOps instrumented, main.go wired
+Plan: 5 of 5 in phase 5 (05-05 complete — SyncRecords handler + POST /sync route + shared API doc)
+Status: Phase 5 Complete
+Last activity: 2026-02-28 -- Plan 05-05 complete: SyncRecords handler wiring reconcile.DiffRecords + reconcile.Apply + audit.Write + SyncOpsTotal metrics; POST /api/v1/zones/{zoneID}/sync registered behind RequireAdmin; shared API doc updated with GET /metrics and POST /sync
 
-Progress: [██████████████] 88%
+Progress: [████████████████] 100% (Phase 5 complete)
 
 ## Performance Metrics
 
@@ -36,7 +36,7 @@ Progress: [██████████████] 88%
 - Last 5 plans: 12 min, 15 min, 4 min, 2 min, 7 min
 - Trend: Consistent
 
-| 05-observability-sync-engine | 4/5 (in progress) | 2 min (P04) | - |
+| 05-observability-sync-engine | 5/5 (complete) | 3 min (P05) | - |
 
 *Updated after each plan completion*
 
@@ -108,6 +108,11 @@ Recent decisions affecting current work:
 - [Phase 05-04]: recordsEqual compares TTL, Priority, Weight, Port, Target, Dynamic — Content/Name/Type are in the key, ID intentionally differs between current (server-assigned) and desired (empty)
 - [Phase 05-04]: DiffRecords Update slice carries cur.ID into desired record — browser UpdateRecord call requires the existing record ID
 - [Phase 05-04]: Apply delete-before-add order avoids transient conflicts; make([]SyncResult, 0, ...) guarantees non-nil empty slice
+- [Phase 05-05]: syncHTTPResponse defined in handlers/sync.go — had_errors is HTTP-layer concern, not reconcile package concern
+- [Phase 05-05]: HTTP 200 always for sync; had_errors=true in body signals partial failure — avoids 207 Multi-Status complexity
+- [Phase 05-05]: dry_run path skips audit.Write — no mutations occurred, nothing to record
+- [Phase 05-05]: Each apply closure independently wraps breakers.Execute + WithRetry + WithAccount — mirrors existing handler patterns exactly
+- [Phase 05-05]: DELETE /{zoneID} and Route("/{zoneID}", ...) coexist as sibling chi registrations — chi resolves by method without conflict
 - [Phase 05-02]: PrometheusMiddleware uses chi.RouteContext RoutePattern() not r.URL.Path — avoids label cardinality explosion from zone/record IDs in path
 - [Phase 05-02]: opType string parameter added to WithAccount — fine-grained per-operation labels (list_zones, create_record, etc.) for actionable dashboards
 - [Phase 05-02]: QueueDepth Dec on all 3 WithAccount exit paths (acquire/timeout/cancel) — prevents permanent gauge drift
@@ -125,5 +130,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 05-02-PLAN.md (HTTP middleware instrumentation: PrometheusMiddleware + /metrics + WithAccount opType + browser lifecycle metrics)
+Stopped at: Completed 05-05-PLAN.md (SyncRecords handler: reconcile diff + apply + audit + metrics + POST /sync route + shared API doc)
 Resume file: None

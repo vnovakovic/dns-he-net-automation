@@ -71,7 +71,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SYNC-03**: Changes are applied in safe order: deletes first, then updates, then adds — to avoid transient conflicts
 - [x] **SYNC-04**: Sync supports partial success: if one operation fails, remaining operations still execute, and the response reports per-operation results
 - [x] **SYNC-05**: Sync is idempotent: running sync twice with the same desired state produces no changes on the second run
-- [ ] **SYNC-06**: Sync supports a `dry_run=true` query parameter that returns the diff/plan without applying any changes
+- [x] **SYNC-06**: Sync supports a `dry_run=true` query parameter that returns the diff/plan without applying any changes
 
 ### BIND Zone File Import/Export
 
@@ -236,7 +236,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNC-03 | Phase 5 | Complete (05-04) |
 | SYNC-04 | Phase 5 | Complete (05-04) |
 | SYNC-05 | Phase 5 | Complete (05-04) |
-| SYNC-06 | Phase 5 | Pending |
+| SYNC-06 | Phase 5 | Complete |
 | BIND-01 | Phase 6 | Pending |
 | BIND-02 | Phase 6 | Pending |
 | BIND-03 | Phase 6 | Pending |
