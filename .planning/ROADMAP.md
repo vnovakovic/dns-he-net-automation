@@ -53,7 +53,7 @@ Plans:
 Plans:
 - [x] 02-01: Bearer token system (issuance, hashing, validation, revocation) and SQLite token store
 - [x] 02-02: chi router, auth middleware, account management endpoints, token management endpoints, bootstrap CLI
-- [ ] 02-03: Health endpoint, structured logging, graceful shutdown, error response contract
+- [x] 02-03: Health endpoint, structured logging, graceful shutdown, error response contract
 
 ### Phase 3: DNS Operations
 **Goal**: External clients can perform full DNS record and zone CRUD via the REST API, with idempotent operations suitable for Terraform and Ansible
@@ -129,7 +129,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation + Browser Core | 3/3 | Complete | 2026-02-27 |
-| 2. API Layer + Authentication | 2/3 | In progress | - |
+| 2. API Layer + Authentication | 3/TBD | In progress | - |
 | 3. DNS Operations | 0/3 | Not started | - |
 | 4. Production Hardening | 0/3 | Not started | - |
 | 5. Observability + Sync Engine | 0/3 | Not started | - |

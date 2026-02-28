@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 2 of 6 (HTTP API Layer)
-Plan: 2 of 5 in phase 2 (02-02 complete)
+Plan: 3 of 5 in phase 2 (02-03 complete)
 Status: In Progress
-Last activity: 2026-02-28 -- Plan 02-02 complete, chi router + auth middleware + account/token handlers + HTTP server
+Last activity: 2026-02-28 -- Plan 02-03 complete, GET /healthz + JSON panic recovery + custom 404/405 + graceful shutdown hardening
 
-Progress: [█████░░░░░] 31%
+Progress: [██████░░░░] 38%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 7 min
-- Total execution time: 0.48 hours
+- Total plans completed: 5
+- Average duration: 6 min
+- Total execution time: 0.53 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-browser-core | 3/3 | 25 min | 8 min |
-| 02-api-auth | 2/5 | 10 min | 5 min |
+| 02-api-auth | 3/5 | 13 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 9 min, 7 min, 9 min, 4 min, 6 min
+- Last 5 plans: 7 min, 9 min, 4 min, 6 min, 3 min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -62,6 +62,9 @@ Recent decisions affecting current work:
 - [02-02]: Bootstrap CLI skips "create" positional arg before parsing flags -- flag.Parse stops at first non-flag arg, os.Args[2] == "create" detected and parseArgs starts at os.Args[3:]
 - [02-02]: Bootstrap INSERT OR IGNORE for account row -- tokens FK requires accounts row; bootstrap auto-creates with accountID as username, idempotent on repeated runs
 - [02-02]: chiMiddleware.Logger excluded from router -- uses log.Printf not slog; structured request logging in BearerAuth via slog.InfoContext instead
+- [02-03]: Custom panic recovery replaces chiMiddleware.Recoverer -- chi default returns plain text 500; inline middleware calls response.WriteError for JSON error contract (API-04)
+- [02-03]: context.Background() for shutdownCtx -- signal context is already Done at shutdown time; using it as parent gives zero drain window; context.Background() provides full 30s
+- [02-03]: Browser health returns "not connected" for nil launcher -- guards nil pointer dereference and correctly signals degraded status
 
 ### Pending Todos
 
@@ -75,5 +78,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 02-02-PLAN.md (chi router, BearerAuth/RBAC middleware, account/token handlers, HTTP server with graceful shutdown, bootstrap CLI)
+Stopped at: Completed 02-03-PLAN.md (GET /healthz, JSON panic recovery, custom 404/405, graceful shutdown hardening)
 Resume file: None

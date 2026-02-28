@@ -99,10 +99,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Operational
 
-- [ ] **OPS-01**: `GET /healthz` returns 200 with a JSON body reporting: service status, browser pool status (sessions active/idle), Vault connectivity status, SQLite connectivity
-- [ ] **OPS-02**: All log output uses Go `log/slog` in structured JSON format with request ID, account ID, operation type, and duration fields
+- [x] **OPS-01**: `GET /healthz` returns 200 with a JSON body reporting: service status, browser pool status (sessions active/idle), Vault connectivity status, SQLite connectivity
+- [x] **OPS-02**: All log output uses Go `log/slog` in structured JSON format with request ID, account ID, operation type, and duration fields
 - [x] **OPS-03**: Configuration is loaded from environment variables with an optional YAML/TOML config file; env vars take precedence (12-factor)
-- [ ] **OPS-04**: Service handles SIGTERM/SIGINT gracefully: stops accepting new requests, drains in-flight browser operations (with timeout), closes all browser sessions, closes SQLite, then exits
+- [x] **OPS-04**: Service handles SIGTERM/SIGINT gracefully: stops accepting new requests, drains in-flight browser operations (with timeout), closes all browser sessions, closes SQLite, then exits
 - [ ] **OPS-05**: Service ships as a single static Go binary and as a Docker image based on `chromedp/headless-shell` (~150MB)
 - [x] **OPS-06**: SQLite database schema is managed by embedded SQL migrations via `pressly/goose` v3, run automatically at startup
 
@@ -252,10 +252,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-05 | Phase 3 | Pending |
 | API-06 | Phase 3 | Pending |
 | API-07 | Phase 2 | Complete |
-| OPS-01 | Phase 2 | Pending |
-| OPS-02 | Phase 2 | Pending |
+| OPS-01 | Phase 2 | Complete |
+| OPS-02 | Phase 2 | Complete |
 | OPS-03 | Phase 1 | Complete (01-01) |
-| OPS-04 | Phase 2 | Pending |
+| OPS-04 | Phase 2 | Complete |
 | OPS-05 | Phase 4 | Pending |
 | OPS-06 | Phase 1 | Complete (01-01) |
 | OBS-01 | Phase 5 | Pending |
