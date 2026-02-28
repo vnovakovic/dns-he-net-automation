@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** External systems can manage DNS records on dns.he.net via a REST API as if it were a first-class DNS provider, without any manual web interaction.
-**Current focus:** Phase 4: Production Hardening
+**Current focus:** Phase 5: Observability and Sync Engine
 
 ## Current Position
 
-Phase: 4 of 6 (Production Hardening)
-Plan: 4 of 4 in phase 4 (04-04 complete — phase complete)
-Status: Phase 4 Complete
-Last activity: 2026-02-28 -- Plan 04-04 complete, all Phase 4 components wired: VaultProvider selection, circuit breaker + retry on browser ops, rate limiting, /healthz vault status, Dockerfile OCI labels + non-root user, arm64 cross-compile
+Phase: 5 of 6 (Observability and Sync Engine)
+Plan: 3 of 5 in phase 5 (05-03 complete — audit log migration, audit package, 5 handler integrations)
+Status: In Progress
+Last activity: 2026-02-28 -- Plan 05-03 complete: audit_log migration + audit.Write() integrated into CreateZone, DeleteZone, CreateRecord, UpdateRecord, DeleteRecord
 
-Progress: [██████████] 75%
+Progress: [████████████] 80%
 
 ## Performance Metrics
 
@@ -35,6 +35,8 @@ Progress: [██████████] 75%
 **Recent Trend:**
 - Last 5 plans: 12 min, 15 min, 4 min, 2 min, 7 min
 - Trend: Consistent
+
+| 05-observability-sync-engine | 3/5 (in progress) | 2 min (P03) | - |
 
 *Updated after each plan completion*
 
@@ -94,6 +96,9 @@ Recent decisions affecting current work:
 - [Phase 04-04]: VaultProvider.Client() accessor added — needed for vaultHealthFn closure in main.go; type assertion safe because only reached in cfg.VaultAddr != "" branch
 - [Phase 04-04]: Dockerfile non-root USER server after playwright install — playwright install --with-deps requires root (apt-get)
 - [Phase 04-04]: Test nil breakers safe for unit tests — all unit test paths return before breakers.Execute (validation/auth early exits)
+- [Phase 05-03]: Audit write occurs after browser op (success or failure both recorded); audit failure is non-fatal (slog.ErrorContext only)
+- [Phase 05-03]: error_msg uses any type for nullable mapping: nil for empty string, string value for error — avoids *string indirection
+- [Phase 05-03]: Resource format is 'zone:<id>' or 'record:<id>' for programmatic parsing in audit_log
 
 ### Pending Todos
 
@@ -107,5 +112,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 04-04-PLAN.md (all Phase 4 components wired — VaultProvider, circuit breakers, rate limiting, healthz vault status, Docker OCI labels, arm64 cross-compile)
+Stopped at: Completed 05-03-PLAN.md (audit_log migration, audit package, 5 handler integrations — CreateZone, DeleteZone, CreateRecord, UpdateRecord, DeleteRecord)
 Resume file: None

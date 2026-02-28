@@ -109,7 +109,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Observability
 
 - [ ] **OBS-01**: `GET /metrics` exposes Prometheus-format metrics including: request count/duration by endpoint, browser operation count/duration by type, active browser sessions gauge, request queue depth per account, error counts by type
-- [ ] **OBS-02**: An audit log table in SQLite records: timestamp, token_id, account_id, action (create/update/delete/sync), resource identifier, result (success/failure)
+- [x] **OBS-02**: An audit log table in SQLite records: timestamp, token_id, account_id, action (create/update/delete/sync), resource identifier, result (success/failure)
 - [x] **OBS-03**: Browser operations that fail produce a debug screenshot saved to a configurable directory for post-mortem analysis
 
 ### Resilience
@@ -259,7 +259,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPS-05 | Phase 4 | Complete |
 | OPS-06 | Phase 1 | Complete (01-01) |
 | OBS-01 | Phase 5 | Pending |
-| OBS-02 | Phase 5 | Pending |
+| OBS-02 | Phase 5 | Complete |
 | OBS-03 | Phase 4 | Complete |
 | RES-01 | Phase 4 | Complete |
 | RES-02 | Phase 4 | Complete |
