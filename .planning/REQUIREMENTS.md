@@ -30,10 +30,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Account Management
 
-- [ ] **ACCT-01**: Operator can register a dns.he.net account in the system by providing an account name and Vault path — credentials are stored in Vault, only metadata in SQLite
-- [ ] **ACCT-02**: Operator can list all registered accounts (returns metadata only, never credentials)
-- [ ] **ACCT-03**: Operator can remove an account from the system, which closes its browser session and deletes its metadata from SQLite
-- [ ] **ACCT-04**: Account isolation is enforced: a token scoped to account A cannot see or modify account B's zones or records under any circumstance
+- [x] **ACCT-01**: Operator can register a dns.he.net account in the system by providing an account name and Vault path — credentials are stored in Vault, only metadata in SQLite
+- [x] **ACCT-02**: Operator can list all registered accounts (returns metadata only, never credentials)
+- [x] **ACCT-03**: Operator can remove an account from the system, which closes its browser session and deletes its metadata from SQLite
+- [x] **ACCT-04**: Account isolation is enforced: a token scoped to account A cannot see or modify account B's zones or records under any circumstance
 
 ### Token Management (Authentication)
 
@@ -89,13 +89,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### API Design Contract
 
-- [ ] **API-01**: All API endpoints are prefixed with `/api/v1/`
-- [ ] **API-02**: All request and response bodies are JSON with `Content-Type: application/json`
-- [ ] **API-03**: Proper HTTP status codes are returned: 200 OK, 201 Created, 204 No Content, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 429 Too Many Requests, 500 Internal Server Error
-- [ ] **API-04**: Error responses follow a consistent schema: `{"error": "<message>", "code": "<machine_readable_code>"}` with actionable messages (e.g., "Record A foo.example.com already exists", not "Internal Server Error")
+- [x] **API-01**: All API endpoints are prefixed with `/api/v1/`
+- [x] **API-02**: All request and response bodies are JSON with `Content-Type: application/json`
+- [x] **API-03**: Proper HTTP status codes are returned: 200 OK, 201 Created, 204 No Content, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 429 Too Many Requests, 500 Internal Server Error
+- [x] **API-04**: Error responses follow a consistent schema: `{"error": "<message>", "code": "<machine_readable_code>"}` with actionable messages (e.g., "Record A foo.example.com already exists", not "Internal Server Error")
 - [ ] **API-05**: Every API response for a record or zone includes stable resource IDs suitable for Terraform state tracking
 - [ ] **API-06**: `GET` endpoints for records support query parameter filtering by record type and/or name
-- [ ] **API-07**: All authenticated endpoints require `Authorization: Bearer <token>` header
+- [x] **API-07**: All authenticated endpoints require `Authorization: Bearer <token>` header
 
 ### Operational
 
@@ -128,10 +128,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Security
 
-- [ ] **SEC-01**: dns.he.net credentials never appear in SQLite, logs, API responses, or error messages — they exist only in Vault and transiently in memory
+- [x] **SEC-01**: dns.he.net credentials never appear in SQLite, logs, API responses, or error messages — they exist only in Vault and transiently in memory
 - [x] **SEC-02**: Bearer tokens are stored as SHA-256 hashes in SQLite; the plaintext token is returned only at creation time
 - [x] **SEC-03**: The SQLite database file permissions are set to 0600 (owner read/write only)
-- [ ] **SEC-04**: All API input is validated and sanitized before use in browser form fields to prevent injection into dns.he.net forms
+- [x] **SEC-04**: All API input is validated and sanitized before use in browser form fields to prevent injection into dns.he.net forms
 
 ### Reliability
 
@@ -207,10 +207,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VAULT-04 | Phase 4 | Pending |
 | VAULT-05 | Phase 4 | Pending |
 | VAULT-06 | Phase 4 | Pending |
-| ACCT-01 | Phase 2 | Pending |
-| ACCT-02 | Phase 2 | Pending |
-| ACCT-03 | Phase 2 | Pending |
-| ACCT-04 | Phase 2 | Pending |
+| ACCT-01 | Phase 2 | Complete |
+| ACCT-02 | Phase 2 | Complete |
+| ACCT-03 | Phase 2 | Complete |
+| ACCT-04 | Phase 2 | Complete |
 | TOKEN-01 | Phase 2 | Complete |
 | TOKEN-02 | Phase 2 | Complete |
 | TOKEN-03 | Phase 2 | Complete |
@@ -245,13 +245,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UI-03 | Phase 6 | Pending |
 | UI-04 | Phase 6 | Pending |
 | UI-05 | Phase 6 | Pending |
-| API-01 | Phase 2 | Pending |
-| API-02 | Phase 2 | Pending |
-| API-03 | Phase 2 | Pending |
-| API-04 | Phase 2 | Pending |
+| API-01 | Phase 2 | Complete |
+| API-02 | Phase 2 | Complete |
+| API-03 | Phase 2 | Complete |
+| API-04 | Phase 2 | Complete |
 | API-05 | Phase 3 | Pending |
 | API-06 | Phase 3 | Pending |
-| API-07 | Phase 2 | Pending |
+| API-07 | Phase 2 | Complete |
 | OPS-01 | Phase 2 | Pending |
 | OPS-02 | Phase 2 | Pending |
 | OPS-03 | Phase 1 | Complete (01-01) |
@@ -267,10 +267,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PERF-01 | Phase 3 | Pending |
 | PERF-02 | Phase 3 | Pending |
 | PERF-03 | Phase 3 | Pending |
-| SEC-01 | Phase 2 | Pending |
+| SEC-01 | Phase 2 | Complete |
 | SEC-02 | Phase 2 | Complete |
 | SEC-03 | Phase 1 | Complete (01-01) |
-| SEC-04 | Phase 2 | Pending |
+| SEC-04 | Phase 2 | Complete |
 | REL-01 | Phase 1 | Complete (01-01) |
 | REL-02 | Phase 1 | Complete (01-02) |
 | REL-03 | Phase 1 | Complete (01-02) |

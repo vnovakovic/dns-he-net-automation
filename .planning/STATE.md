@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 2 of 6 (HTTP API Layer)
-Plan: 1 of 5 in phase 2 (02-01 complete)
+Plan: 2 of 5 in phase 2 (02-02 complete)
 Status: In Progress
-Last activity: 2026-02-27 -- Plan 02-01 complete, token package + migration
+Last activity: 2026-02-28 -- Plan 02-02 complete, chi router + auth middleware + account/token handlers + HTTP server
 
-Progress: [████░░░░░░] 23%
+Progress: [█████░░░░░] 31%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 8 min
-- Total execution time: 0.38 hours
+- Total plans completed: 4
+- Average duration: 7 min
+- Total execution time: 0.48 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-browser-core | 3/3 | 25 min | 8 min |
-| 02-api-auth | 1/5 | 4 min | 4 min |
+| 02-api-auth | 2/5 | 10 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 9 min, 7 min, 9 min, 4 min
+- Last 5 plans: 9 min, 7 min, 9 min, 4 min, 6 min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -59,6 +59,9 @@ Recent decisions affecting current work:
 - [02-01]: TestListTokens uses direct INSERT with datetime('-1 hour') for older token -- SQLite CURRENT_TIMESTAMP has 1-second resolution, two rapid IssueToken calls produce same created_at and non-deterministic ORDER BY DESC
 - [02-01]: hashToken unexported helper shared by IssueToken and ValidateToken -- single source of truth for SHA-256 hex encoding
 - [02-01]: RevokeToken scopes UPDATE to account_id as well as jti -- prevents cross-account token revocation
+- [02-02]: Bootstrap CLI skips "create" positional arg before parsing flags -- flag.Parse stops at first non-flag arg, os.Args[2] == "create" detected and parseArgs starts at os.Args[3:]
+- [02-02]: Bootstrap INSERT OR IGNORE for account row -- tokens FK requires accounts row; bootstrap auto-creates with accountID as username, idempotent on repeated runs
+- [02-02]: chiMiddleware.Logger excluded from router -- uses log.Printf not slog; structured request logging in BearerAuth via slog.InfoContext instead
 
 ### Pending Todos
 
@@ -71,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-27
-Stopped at: Completed 02-01-PLAN.md (JWT token package: IssueToken/ValidateToken/RevokeToken/ListTokens, 002_tokens.sql migration, JWTSecret in config)
+Last session: 2026-02-28
+Stopped at: Completed 02-02-PLAN.md (chi router, BearerAuth/RBAC middleware, account/token handlers, HTTP server with graceful shutdown, bootstrap CLI)
 Resume file: None
