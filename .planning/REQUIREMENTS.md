@@ -17,7 +17,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **BROWSER-06**: Every browser operation has a configurable timeout (default 30s) — a hung page does not block the account queue indefinitely
 - [ ] **BROWSER-07**: All CSS selectors and form interactions are encapsulated in page-object files under `internal/browser/pages/` — no selectors leak into handlers or service code
 - [x] **BROWSER-08**: Configurable inter-operation delay with jitter (default 2-3s range) to avoid triggering dns.he.net rate limiting or bot detection
-- [ ] **BROWSER-09**: On fatal browser error (crash, unrecoverable state), the session is automatically restarted with a fresh Chromium context and re-login
+- [x] **BROWSER-09**: On fatal browser error (crash, unrecoverable state), the session is automatically restarted with a fresh Chromium context and re-login
 
 ### Vault Integration
 
@@ -110,7 +110,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **OBS-01**: `GET /metrics` exposes Prometheus-format metrics including: request count/duration by endpoint, browser operation count/duration by type, active browser sessions gauge, request queue depth per account, error counts by type
 - [ ] **OBS-02**: An audit log table in SQLite records: timestamp, token_id, account_id, action (create/update/delete/sync), resource identifier, result (success/failure)
-- [ ] **OBS-03**: Browser operations that fail produce a debug screenshot saved to a configurable directory for post-mortem analysis
+- [x] **OBS-03**: Browser operations that fail produce a debug screenshot saved to a configurable directory for post-mortem analysis
 
 ### Resilience
 
@@ -200,7 +200,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BROWSER-06 | Phase 1 | Complete (01-02) |
 | BROWSER-07 | Phase 1 | Pending |
 | BROWSER-08 | Phase 4 | Complete |
-| BROWSER-09 | Phase 4 | Pending |
+| BROWSER-09 | Phase 4 | Complete |
 | VAULT-01 | Phase 4 | Complete |
 | VAULT-02 | Phase 4 | Complete |
 | VAULT-03 | Phase 4 | Complete |
@@ -260,7 +260,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPS-06 | Phase 1 | Complete (01-01) |
 | OBS-01 | Phase 5 | Pending |
 | OBS-02 | Phase 5 | Pending |
-| OBS-03 | Phase 4 | Pending |
+| OBS-03 | Phase 4 | Complete |
 | RES-01 | Phase 4 | Complete |
 | RES-02 | Phase 4 | Complete |
 | RES-03 | Phase 4 | Complete |

@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 4 of 6 (Production Hardening)
-Plan: 2 of 4 in phase 4 (04-02 complete)
+Plan: 3 of 4 in phase 4 (04-03 complete)
 Status: In Progress
-Last activity: 2026-02-28 -- Plan 04-01 complete, VaultProvider (KV v2, lazy fetch, TTL cache, token/AppRole auth) + 15 new Config env vars
+Last activity: 2026-02-28 -- Plan 04-03 complete, SaveDebugScreenshot + screenshotDir in SessionManager + BROWSER-09 crash recovery logging
 
-Progress: [█████████░] 65%
+Progress: [█████████░] 68%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 5 min
-- Total execution time: 0.97 hours
+- Total execution time: 0.99 hours
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: [█████████░] 65%
 | 01-foundation-browser-core | 3/3 | 25 min | 8 min |
 | 02-api-auth | 3/5 | 13 min | 4 min |
 | 03-dns-operations | 3/3 | 30 min | 10 min |
-| 04-production-hardening | 2/4 | 9 min | 4 min |
+| 04-production-hardening | 3/4 | 11 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 6 min, 3 min, 12 min, 15 min, 4 min
+- Last 5 plans: 3 min, 12 min, 15 min, 4 min, 2 min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -88,6 +88,9 @@ Recent decisions affecting current work:
 - [04-02]: BreakerRegistry.Execute wraps ErrOpenState into descriptive message rather than exposing gobreaker error directly — cleaner handler layer mapping to 503
 - [04-02]: PerTokenRateLimit falls back to RemoteAddr when no Bearer token — safe to register even before BearerAuth
 - [04-02]: math/rand used for jitter (not crypto/rand) — jitter is rate-limiting anti-fingerprinting, not cryptographic randomness
+- [Phase 04-03]: playwright-go v0.5700.1 Screenshot API is variadic PageScreenshotOptions value not pointer — page.Screenshot(opts) not page.Screenshot(&opts)
+- [Phase 04-03]: screenshotDir added as final parameter to NewSessionManager — preserves ordering with prior maxOpDelay addition from Plan 02
+- [Phase 04-03]: SaveDebugScreenshot has no test file — filesystem side-effect helper; verified via build, vet, and session.go integration
 
 ### Pending Todos
 
@@ -101,5 +104,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 04-01-PLAN.md (VaultProvider with KV v2 lazy fetch, TTL cache, stale fallback, token/AppRole auth + 15 new Config env vars)
+Stopped at: Completed 04-03-PLAN.md (SaveDebugScreenshot + screenshotDir in SessionManager + BROWSER-09 crash recovery logging)
 Resume file: None
