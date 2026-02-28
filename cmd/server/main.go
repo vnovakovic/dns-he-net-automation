@@ -19,6 +19,7 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/config"
 	"github.com/vnovakov/dns-he-net-automation/internal/credential"
+	"github.com/vnovakov/dns-he-net-automation/internal/metrics"
 	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
 	"github.com/vnovakov/dns-he-net-automation/internal/store"
 	"github.com/vnovakov/dns-he-net-automation/internal/token"
@@ -115,6 +116,12 @@ func main() {
 		slog.Info("accounts loaded", "count", len(ids), "ids", ids)
 	}
 
+	// Initialize Prometheus metrics registry (OBS-01).
+	// All application metrics (HTTP, browser, queue, sessions) are scoped to this registry.
+	// The registry is passed to NewSessionManager and NewRouter; it is never registered on
+	// prometheus.DefaultRegisterer (custom registry pattern — avoids test panics).
+	reg := metrics.NewRegistry()
+
 	// Initialize Playwright browser launcher (BROWSER-01).
 	launcher, err := browser.NewLauncher(cfg.PlaywrightHeadless, cfg.PlaywrightSlowMo)
 	if err != nil {
@@ -132,7 +139,7 @@ func main() {
 	maxOpDelay := time.Duration(cfg.MaxOperationDelaySec * float64(time.Second))
 
 	// Create session manager with per-account mutex serialization (REL-02, REL-03).
-	sm := browser.NewSessionManager(launcher, credProvider, queueTimeout, opTimeout, reloginAge, minOpDelay, maxOpDelay, cfg.ScreenshotDir)
+	sm := browser.NewSessionManager(launcher, credProvider, queueTimeout, opTimeout, reloginAge, minOpDelay, maxOpDelay, cfg.ScreenshotDir, reg)
 	defer sm.Close()
 
 	// Initialize per-account circuit breaker registry (RES-02, RES-03).
@@ -164,7 +171,7 @@ func main() {
 
 	// Wire chi router and start HTTP server (Phase 2).
 	handler := api.NewRouter(db, sm, launcher, []byte(cfg.JWTSecret), breakers,
-		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn)
+		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn, reg)
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: handler,
