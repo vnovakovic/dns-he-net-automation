@@ -4,11 +4,14 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/admin/templates"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
+	"github.com/vnovakov/dns-he-net-automation/internal/model"
 	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
+	"github.com/vnovakov/dns-he-net-automation/internal/token"
 )
 
 // RegisterAdminRoutes mounts the /admin sub-router onto the provided chi.Router.
@@ -161,47 +164,225 @@ func handleLogout() http.HandlerFunc {
 //   to change when plans 03 and 04 replace these bodies. Plans 03 and 04 only
 //   replace function bodies, not the wiring in RegisterAdminRoutes. (Checker issue 5 fix)
 
+// listAccountsFromDB queries the accounts table and returns model.Account records ordered by
+// created_at ASC. Extracted as a helper because both handleAccountsPage and handleTokensPage
+// need the same account list.
+//
+// WHY not use store.ListAccounts:
+//   The store package only exposes Open() for DB initialization. Account CRUD is done via
+//   inline DB queries (same pattern as REST handlers in internal/api/handlers/accounts.go).
+//   The admin UI follows the same pattern — direct DB access, no HTTP round-trips to /api/v1.
+func listAccountsFromDB(r *http.Request, db *sql.DB) ([]model.Account, error) {
+	rows, err := db.QueryContext(r.Context(),
+		`SELECT id, username, created_at, updated_at FROM accounts ORDER BY created_at ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var accounts []model.Account
+	for rows.Next() {
+		var acc model.Account
+		if err := rows.Scan(&acc.ID, &acc.Username, &acc.CreatedAt, &acc.UpdatedAt); err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, acc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if accounts == nil {
+		accounts = []model.Account{}
+	}
+	return accounts, nil
+}
+
 func handleAccountsPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "accounts page: implemented in plan 03", http.StatusNotImplemented)
+		accounts, err := listAccountsFromDB(r, db)
+		if err != nil {
+			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
+			return
+		}
+		data := templates.PageData{Title: "Accounts", ActivePage: "accounts"}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.AccountsPage(accounts, data).Render(r.Context(), w)
 	}
 }
 
+// handleAccountCreate registers a new account and returns just the new row for htmx insertion.
+//
+// WHY return only AccountRow (not a full page):
+//   The form uses hx-swap="beforeend" on #accounts-table tbody — htmx appends the partial
+//   response directly into the table body without a full page reload. Returning the full page
+//   would overwrite the entire page content.
+//
+// WHY inline DB insert (not store.CreateAccount):
+//   The store package only provides Open(). Account CRUD mirrors the REST handler pattern:
+//   inline ExecContext + QueryRowContext for created_at (DB-assigned timestamp).
 func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "account create: implemented in plan 03", http.StatusNotImplemented)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		accountID := strings.TrimSpace(r.FormValue("account_id"))
+		username := strings.TrimSpace(r.FormValue("username"))
+		if accountID == "" || username == "" {
+			http.Error(w, "account_id and username required", http.StatusBadRequest)
+			return
+		}
+
+		_, err := db.ExecContext(r.Context(),
+			`INSERT INTO accounts (id, username) VALUES (?, ?)`,
+			accountID, username,
+		)
+		if err != nil {
+			http.Error(w, "Failed to create account: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Fetch the DB-assigned created_at and updated_at for the template.
+		var acc model.Account
+		err = db.QueryRowContext(r.Context(),
+			`SELECT id, username, created_at, updated_at FROM accounts WHERE id = ?`,
+			accountID,
+		).Scan(&acc.ID, &acc.Username, &acc.CreatedAt, &acc.UpdatedAt)
+		if err != nil {
+			http.Error(w, "Failed to retrieve created account", http.StatusInternalServerError)
+			return
+		}
+
+		// Return just the new row — htmx appends it to #accounts-table tbody.
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.AccountRow(acc).Render(r.Context(), w)
 	}
 }
 
+// handleAccountDelete removes an account by ID and returns an empty 200 for htmx row removal.
+//
+// WHY return empty 200 (not 204):
+//   htmx hx-swap="outerHTML swap:500ms" replaces the target element with the response body.
+//   An empty 200 body makes htmx replace the row element with nothing (effectively removing it).
+//   204 No Content would also work, but 200 with empty body is clearer for htmx's swap behavior.
+//
+// WHY sm parameter is accepted but _ = sm:
+//   The RegisterAdminRoutes signature is frozen (plan 02 decision). sm is accepted for signature
+//   consistency. Session cleanup on account deletion is handled lazily — the next operation
+//   attempt on a deleted account will fail and the session will be cleaned up at that point.
 func handleAccountDelete(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "account delete: implemented in plan 03", http.StatusNotImplemented)
+		accountID := chi.URLParam(r, "accountID")
+		_, err := db.ExecContext(r.Context(),
+			`DELETE FROM accounts WHERE id = ?`,
+			accountID,
+		)
+		if err != nil {
+			http.Error(w, "Failed to delete account", http.StatusInternalServerError)
+			return
+		}
+		// sm is accepted for RegisterAdminRoutes signature stability — see handleAccountDelete comment.
+		_ = sm
+		// htmx swaps the target row with empty body, removing it from the DOM.
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
 func handleTokensPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "tokens page: implemented in plan 03", http.StatusNotImplemented)
+		accounts, err := listAccountsFromDB(r, db)
+		if err != nil {
+			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
+			return
+		}
+		data := templates.PageData{Title: "Tokens", ActivePage: "tokens"}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.TokensPage(accounts, data).Render(r.Context(), w)
 	}
 }
 
 func handleTokensForAccount(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "tokens for account: implemented in plan 03", http.StatusNotImplemented)
+		accountID := chi.URLParam(r, "accountID")
+		tokens, err := token.ListTokens(r.Context(), db, accountID)
+		if err != nil {
+			http.Error(w, "Failed to list tokens", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.TokensForAccount(accountID, tokens).Render(r.Context(), w)
 	}
 }
 
+// handleTokenIssue issues a new JWT bearer token and returns the token row + plaintext JWT.
+//
+// WHY show rawJWT in the response (not just the row):
+//   The raw JWT is shown exactly once at creation — it is never persisted in the DB (SEC-02).
+//   NewTokenResult renders both the TokenRow and a plaintext JWT reveal row so the operator
+//   can copy it immediately. After page reload it will not be shown again.
+//
+// WHY ListTokens + JTI match (not a direct GetToken by JTI):
+//   There is no GetToken(jti) helper. ListTokens returns all tokens ordered by created_at DESC.
+//   We search for the matching JTI in the returned slice — the newly issued token will be there.
 func handleTokenIssue(db *sql.DB, jwtSecret []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "token issue: implemented in plan 03", http.StatusNotImplemented)
+		accountID := chi.URLParam(r, "accountID")
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		label := r.FormValue("label")
+		role := r.FormValue("role")
+		if role == "" {
+			role = "viewer"
+		}
+
+		rawJWT, jti, err := token.IssueToken(r.Context(), db, accountID, role, label, 0, jwtSecret)
+		if err != nil {
+			http.Error(w, "Failed to issue token: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Fetch the newly issued token record to populate the template.
+		// ListTokens returns newest first; we find the matching record by JTI.
+		tokens, err := token.ListTokens(r.Context(), db, accountID)
+		if err != nil || len(tokens) == 0 {
+			http.Error(w, "Failed to fetch issued token", http.StatusInternalServerError)
+			return
+		}
+		var tok token.TokenRecord
+		for _, t := range tokens {
+			if t.JTI == jti {
+				tok = t
+				break
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.NewTokenResult(tok, rawJWT).Render(r.Context(), w)
 	}
 }
 
+// handleTokenRevoke revokes a token by JTI using RevokeByJTI (no accountID required).
+//
+// WHY token.RevokeByJTI instead of token.RevokeToken:
+//   The admin revoke URL is DELETE /admin/tokens/{tokenID} — it does not include accountID.
+//   token.RevokeToken requires accountID for scoped revocation (prevents cross-account revokes
+//   via the REST API). For the admin UI, full authority over all tokens is expected, so the
+//   simpler JTI-only revoke is correct. RevokeByJTI was added to token.go in task 1.
 func handleTokenRevoke(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "token revoke: implemented in plan 03", http.StatusNotImplemented)
+		tokenID := chi.URLParam(r, "tokenID")
+		if err := token.RevokeByJTI(r.Context(), db, tokenID); err != nil {
+			http.Error(w, "Failed to revoke token", http.StatusInternalServerError)
+			return
+		}
+		// Return empty 200 — htmx swaps row with empty body, removing it from DOM.
+		w.WriteHeader(http.StatusOK)
 	}
 }
+
 
 func handleZonesPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

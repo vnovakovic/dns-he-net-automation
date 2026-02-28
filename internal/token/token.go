@@ -201,6 +201,42 @@ func RevokeToken(ctx context.Context, db *sql.DB, accountID, jti string) error {
 	return nil
 }
 
+// RevokeByJTI marks a token as revoked by its JTI alone, without an accountID scope check.
+//
+// WHY a separate function from RevokeToken:
+//   RevokeToken(ctx, db, accountID, jti) scopes the UPDATE to a specific account — preventing
+//   one account from revoking another account's tokens via the REST API. The admin UI does not
+//   have the accountID in the revoke URL (DELETE /admin/tokens/{tokenID}), and admin access
+//   already implies full authority over all tokens. The accountID constraint would require an
+//   extra DB query to look up the account before revoking, adding unnecessary complexity.
+//
+// WHY not call GET /api/v1/tokens + DELETE /api/v1/... over HTTP:
+//   Admin UI is in-process. Making HTTP calls to itself adds network round-trips and requires
+//   token management for the admin session itself. Direct DB access is correct here.
+//   (RESEARCH.md anti-pattern: admin UI must not HTTP-call API)
+//
+// SQL: UPDATE tokens SET revoked_at = CURRENT_TIMESTAMP WHERE jti = ? AND revoked_at IS NULL
+// Returns sql.ErrNoRows if the JTI is not found or already revoked.
+func RevokeByJTI(ctx context.Context, db *sql.DB, jti string) error {
+	result, err := db.ExecContext(ctx,
+		`UPDATE tokens SET revoked_at = CURRENT_TIMESTAMP WHERE jti = ? AND revoked_at IS NULL`,
+		jti,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke by jti: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
 // ListTokens returns all token records for the given accountID, ordered by created_at DESC.
 // The response never includes token_hash or raw token values (TOKEN-06, SEC-02).
 // Returns an empty slice (not an error) when no tokens exist for the account.
