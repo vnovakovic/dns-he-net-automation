@@ -21,3 +21,11 @@ func WriteError(w http.ResponseWriter, status int, code, message string) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(ErrorResponse{Error: message, Code: code})
 }
+
+// WriteJSON writes a JSON success response with the given HTTP status and body value.
+// Sets Content-Type: application/json. Use for all non-error JSON responses (API-02).
+func WriteJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}

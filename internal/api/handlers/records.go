@@ -6,12 +6,14 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	playwright "github.com/playwright-community/playwright-go"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/middleware"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
+	"github.com/vnovakov/dns-he-net-automation/internal/api/validate"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
 	"github.com/vnovakov/dns-he-net-automation/internal/model"
@@ -141,10 +143,35 @@ func ListRecords(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 			return
 		}
 
+		// Apply query parameter filters (API-06).
+		if filterType := r.URL.Query().Get("type"); filterType != "" {
+			ft := model.RecordType(strings.ToUpper(strings.TrimSpace(filterType)))
+			filtered := records[:0]
+			for _, rec := range records {
+				if rec.Type == ft {
+					filtered = append(filtered, rec)
+				}
+			}
+			records = filtered
+		}
+
+		if filterName := r.URL.Query().Get("name"); filterName != "" {
+			fn := strings.ToLower(strings.TrimSpace(filterName))
+			filtered := records[:0]
+			for _, rec := range records {
+				if strings.EqualFold(rec.Name, fn) {
+					filtered = append(filtered, rec)
+				}
+			}
+			records = filtered
+		}
+
 		slog.InfoContext(r.Context(), "list records done",
 			"account_id", claims.AccountID,
 			"zone_id", zoneID,
 			"count", len(records),
+			"filter_type", r.URL.Query().Get("type"),
+			"filter_name", r.URL.Query().Get("name"),
 			"duration_ms", time.Since(start).Milliseconds(),
 		)
 
@@ -153,9 +180,7 @@ func ListRecords(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 			result = append(result, toRecordResponse(rec, start))
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{"records": result})
+		response.WriteJSON(w, http.StatusOK, map[string]any{"records": result})
 	}
 }
 
@@ -206,9 +231,7 @@ func GetRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 			"duration_ms", time.Since(start).Milliseconds(),
 		)
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(toRecordResponse(found, start))
+		response.WriteJSON(w, http.StatusOK, toRecordResponse(found, start))
 	}
 }
 
@@ -237,6 +260,13 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 		// Basic field presence validation.
 		if msg := validateRecordFields(rec); msg != "" {
 			response.WriteError(w, http.StatusBadRequest, "invalid_record", msg)
+			return
+		}
+
+		// Full field validation — enforces TTL allowlist, IP format, type-specific
+		// constraints. Returns 422 before any browser operation (REC-09).
+		if err := validate.ValidateRecord(rec); err != nil {
+			response.WriteError(w, http.StatusUnprocessableEntity, "validation_error", err.Error())
 			return
 		}
 
@@ -307,13 +337,11 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 			"duration_ms", time.Since(start).Milliseconds(),
 		)
 
-		w.Header().Set("Content-Type", "application/json")
 		if existed {
-			w.WriteHeader(http.StatusOK)
+			response.WriteJSON(w, http.StatusOK, toRecordResponse(result, start))
 		} else {
-			w.WriteHeader(http.StatusCreated)
+			response.WriteJSON(w, http.StatusCreated, toRecordResponse(result, start))
 		}
-		_ = json.NewEncoder(w).Encode(toRecordResponse(result, start))
 	}
 }
 
@@ -342,6 +370,13 @@ func UpdateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 		// Basic field presence validation.
 		if msg := validateRecordFields(rec); msg != "" {
 			response.WriteError(w, http.StatusBadRequest, "invalid_record", msg)
+			return
+		}
+
+		// Full field validation — enforces TTL allowlist, IP format, type-specific
+		// constraints. Returns 422 before any browser operation (REC-09).
+		if err := validate.ValidateRecord(rec); err != nil {
+			response.WriteError(w, http.StatusUnprocessableEntity, "validation_error", err.Error())
 			return
 		}
 
@@ -411,9 +446,7 @@ func UpdateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 			"duration_ms", time.Since(start).Milliseconds(),
 		)
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(toRecordResponse(updated, start))
+		response.WriteJSON(w, http.StatusOK, toRecordResponse(updated, start))
 	}
 }
 
