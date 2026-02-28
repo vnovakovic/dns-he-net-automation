@@ -1,0 +1,159 @@
+package templates
+
+import (
+	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakov/dns-he-net-automation/internal/token"
+)
+
+// TokensPage renders the top-level tokens page: list of accounts,
+// each with a "Load Tokens" button that expands token list via htmx.
+//
+// WHY lazy load per account (not all tokens on page load):
+//   An account can have many tokens. Loading all tokens for all accounts on initial
+//   page render would be slow for large deployments. htmx GET /admin/tokens/{accountID}
+//   loads tokens on demand — only when the operator expands an account's section.
+templ TokensPage(accounts []model.Account, data PageData) {
+	@Layout(data) {
+		<div class="page-header">
+			<h2>Tokens</h2>
+		</div>
+		for _, acc := range accounts {
+			<div class="card" style="margin-bottom:1rem;">
+				<div class="card-header">
+					<strong>{ acc.ID }</strong>
+					<span class="text-muted">({ acc.Username })</span>
+					<button
+						class="btn btn-sm"
+						hx-get={ "/admin/tokens/" + acc.ID }
+						hx-target={ "#tokens-" + acc.ID }
+						hx-swap="innerHTML">
+						Load Tokens
+					</button>
+				</div>
+				<div id={ "tokens-" + acc.ID }>
+					<!-- Tokens loaded on demand via htmx -->
+				</div>
+			</div>
+		}
+	}
+}
+
+// TokensForAccount renders the token list for a single account.
+// Used as the htmx partial response for "Load Tokens" button (GET /admin/tokens/{accountID}).
+templ TokensForAccount(accountID string, tokens []token.TokenRecord) {
+	<table class="data-table" style="margin-top:0.75rem;">
+		<thead>
+			<tr>
+				<th>ID</th>
+				<th>Label</th>
+				<th>Role</th>
+				<th>Created</th>
+				<th>Expires</th>
+				<th>Status</th>
+				<th>Actions</th>
+			</tr>
+		</thead>
+		<tbody id={ "token-rows-" + accountID }>
+			for _, tok := range tokens {
+				@TokenRow(tok)
+			}
+		</tbody>
+	</table>
+	<div style="margin-top:0.75rem;">
+		@IssueTokenForm(accountID)
+	</div>
+}
+
+// TokenRow renders a single token row.
+// Used both for full-table render and as htmx response for new token issuance.
+templ TokenRow(tok token.TokenRecord) {
+	<tr id={ "token-row-" + tok.JTI }>
+		<td><code>{ tok.JTI[:8] }...</code></td>
+		<td>{ labelOrDash(tok.Label) }</td>
+		<td>
+			if tok.Role == "admin" {
+				<span class="badge badge-admin">admin</span>
+			} else {
+				<span class="badge">viewer</span>
+			}
+		</td>
+		<td>{ tok.CreatedAt.Format("2006-01-02") }</td>
+		<td>{ expiresStr(tok) }</td>
+		<td>
+			if tok.RevokedAt != nil {
+				<span class="badge badge-danger">revoked</span>
+			} else {
+				<span class="badge badge-success">active</span>
+			}
+		</td>
+		<td>
+			if tok.RevokedAt == nil {
+				<button
+					class="btn btn-danger btn-sm"
+					hx-delete={ "/admin/tokens/" + tok.JTI }
+					hx-target={ "#token-row-" + tok.JTI }
+					hx-swap="outerHTML swap:500ms"
+					hx-confirm="Revoke this token? It will be immediately rejected on the next request.">
+					Revoke
+				</button>
+			}
+		</td>
+	</tr>
+}
+
+// IssueTokenForm renders the inline form for issuing a new token under an account section.
+templ IssueTokenForm(accountID string) {
+	<form
+		hx-post={ "/admin/tokens/" + accountID }
+		hx-target={ "#token-rows-" + accountID }
+		hx-swap="beforeend">
+		<div class="form-row">
+			<div class="form-group">
+				<label>Label</label>
+				<input type="text" name="label" placeholder="e.g. ansible-prod"/>
+			</div>
+			<div class="form-group">
+				<label>Role</label>
+				<select name="role">
+					<option value="viewer">viewer</option>
+					<option value="admin">admin</option>
+				</select>
+			</div>
+			<button type="submit" class="btn btn-primary">Issue Token</button>
+		</div>
+	</form>
+}
+
+// NewTokenResult renders the issued token row with the plaintext token shown once.
+// This is the htmx response after POST /admin/tokens/{accountID}.
+//
+// WHY show rawToken only here:
+//   Token values are never stored in the DB — only their SHA-256 hash is persisted (SEC-02).
+//   This is the only moment the raw JWT is available. After the operator navigates away or
+//   reloads, the plaintext token is gone. This follows the same "shown once" pattern as
+//   GitHub personal access tokens and AWS secret keys.
+templ NewTokenResult(tok token.TokenRecord, rawToken string) {
+	@TokenRow(tok)
+	<tr>
+		<td colspan="7" class="token-reveal">
+			<strong>Token (copy now — shown once):</strong>
+			<code>{ rawToken }</code>
+		</td>
+	</tr>
+}
+
+// labelOrDash returns the label string or an em-dash for nil/empty labels.
+func labelOrDash(label *string) string {
+	if label == nil || *label == "" {
+		return "\u2014"
+	}
+	return *label
+}
+
+// expiresStr formats the optional expiry time for display.
+func expiresStr(tok token.TokenRecord) string {
+	if tok.ExpiresAt == nil {
+		return "never"
+	}
+	return tok.ExpiresAt.Format("2006-01-02")
+}
