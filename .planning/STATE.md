@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 5 of 6 (Observability and Sync Engine)
-Plan: 4 of 5 in phase 5 (05-04 complete — reconcile diff engine with TDD)
+Plan: 5 of 5 in phase 5 (05-02 complete — HTTP middleware instrumentation + browser op metrics)
 Status: In Progress
-Last activity: 2026-02-28 -- Plan 05-04 complete: DiffRecords + Apply in internal/reconcile; (Type,Name,Content)+SRV disambiguation key; ID carry-through on update; no-short-circuit Apply (SYNC-04); 13 tests pass, go vet clean
+Last activity: 2026-02-28 -- Plan 05-02 complete: PrometheusMiddleware (RoutePattern labels), /metrics route, WithAccount opType, QueueDepth/ActiveSessions/BrowserOps instrumented, main.go wired
 
-Progress: [████████████] 80%
+Progress: [██████████████] 88%
 
 ## Performance Metrics
 
@@ -108,6 +108,10 @@ Recent decisions affecting current work:
 - [Phase 05-04]: recordsEqual compares TTL, Priority, Weight, Port, Target, Dynamic — Content/Name/Type are in the key, ID intentionally differs between current (server-assigned) and desired (empty)
 - [Phase 05-04]: DiffRecords Update slice carries cur.ID into desired record — browser UpdateRecord call requires the existing record ID
 - [Phase 05-04]: Apply delete-before-add order avoids transient conflicts; make([]SyncResult, 0, ...) guarantees non-nil empty slice
+- [Phase 05-02]: PrometheusMiddleware uses chi.RouteContext RoutePattern() not r.URL.Path — avoids label cardinality explosion from zone/record IDs in path
+- [Phase 05-02]: opType string parameter added to WithAccount — fine-grained per-operation labels (list_zones, create_record, etc.) for actionable dashboards
+- [Phase 05-02]: QueueDepth Dec on all 3 WithAccount exit paths (acquire/timeout/cancel) — prevents permanent gauge drift
+- [Phase 05-02]: ActiveSessions Inc in createBrowserSession after successful login; Dec in closeBrowserContext when ctx!=nil — exact session lifecycle tracking
 
 ### Pending Todos
 
@@ -121,5 +125,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 05-04-PLAN.md (reconcile diff engine: DiffRecords + Apply with TDD, 13 tests, go vet clean)
+Stopped at: Completed 05-02-PLAN.md (HTTP middleware instrumentation: PrometheusMiddleware + /metrics + WithAccount opType + browser lifecycle metrics)
 Resume file: None
