@@ -118,11 +118,13 @@ Plans:
   2. `POST /api/v1/zones/{zone_id}/import` accepts a BIND zone file body, parses it, and uses the sync engine internally to diff-and-apply (existing matching records are left untouched)
   3. An embedded web UI at `/admin` allows listing/registering/removing accounts and issuing/listing/revoking tokens, protected by admin-level authentication
   4. The admin UI is built with `templ` + `htmx`, embedded in the Go binary with no separate frontend build step, and is optional for operation (all functionality available via REST API)
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: BIND export and import using miekg/dns with sync engine integration
-- [ ] 06-02: Admin UI (templ templates, htmx interactions, account/token management pages)
+- [ ] 06-01-PLAN.md - BIND export (bindio package + ExportZone handler) and import (ParseZoneFile + ImportZone handler, additive-only sync)
+- [ ] 06-02-PLAN.md - Admin UI foundation: auth middleware, static assets, templ layout/login, /admin sub-router skeleton
+- [ ] 06-03-PLAN.md - Admin UI accounts + tokens pages (templ components + htmx interactions)
+- [ ] 06-04-PLAN.md - Admin UI zones + sync + audit log pages, all stub handlers replaced, human verify checkpoint
 
 ## Progress
 
