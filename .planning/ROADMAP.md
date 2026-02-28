@@ -106,7 +106,7 @@ Plans:
 - [ ] 05-01-PLAN.md -- Prometheus metrics registry package (custom registry, all metric vars, Handler())
 - [ ] 05-02-PLAN.md -- HTTP + browser instrumentation (PrometheusMiddleware, SessionManager metrics, /metrics route, main.go wiring)
 - [ ] 05-03-PLAN.md -- Audit log (003_audit_log.sql migration, audit package, Write() calls in all mutating handlers)
-- [ ] 05-04-PLAN.md -- Sync diff algorithm TDD (reconcile package: DiffRecords, Apply, SyncPlan, SyncResult)
+- [x] 05-04-PLAN.md -- Sync diff algorithm TDD (reconcile package: DiffRecords, Apply, SyncPlan, SyncResult)
 - [ ] 05-05-PLAN.md -- Sync HTTP handler and router registration (POST /sync, dry-run, partial success, audit, metrics)
 
 ### Phase 6: BIND Import/Export + Admin UI
@@ -135,5 +135,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. API Layer + Authentication | 3/TBD | Complete    | 2026-02-28 |
 | 3. DNS Operations | 3/3 | Complete    | 2026-02-28 |
 | 4. Production Hardening | 4/4 | Complete   | 2026-02-28 |
-| 5. Observability + Sync Engine | 2/5 | In Progress|  |
+| 5. Observability + Sync Engine | 4/5 | In Progress|  |
 | 6. BIND Import/Export + Admin UI | 0/2 | Not started | - |

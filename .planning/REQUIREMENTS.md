@@ -66,11 +66,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Sync and Reconcile
 
-- [ ] **SYNC-01**: `POST /api/v1/zones/{zone_id}/sync` accepts a desired-state record set and computes a diff against the current live state
-- [ ] **SYNC-02**: The diff produces three sets: records to add, records to update, records to delete
-- [ ] **SYNC-03**: Changes are applied in safe order: deletes first, then updates, then adds — to avoid transient conflicts
-- [ ] **SYNC-04**: Sync supports partial success: if one operation fails, remaining operations still execute, and the response reports per-operation results
-- [ ] **SYNC-05**: Sync is idempotent: running sync twice with the same desired state produces no changes on the second run
+- [x] **SYNC-01**: `POST /api/v1/zones/{zone_id}/sync` accepts a desired-state record set and computes a diff against the current live state
+- [x] **SYNC-02**: The diff produces three sets: records to add, records to update, records to delete
+- [x] **SYNC-03**: Changes are applied in safe order: deletes first, then updates, then adds — to avoid transient conflicts
+- [x] **SYNC-04**: Sync supports partial success: if one operation fails, remaining operations still execute, and the response reports per-operation results
+- [x] **SYNC-05**: Sync is idempotent: running sync twice with the same desired state produces no changes on the second run
 - [ ] **SYNC-06**: Sync supports a `dry_run=true` query parameter that returns the diff/plan without applying any changes
 
 ### BIND Zone File Import/Export
@@ -108,7 +108,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Observability
 
-- [ ] **OBS-01**: `GET /metrics` exposes Prometheus-format metrics including: request count/duration by endpoint, browser operation count/duration by type, active browser sessions gauge, request queue depth per account, error counts by type
+- [x] **OBS-01**: `GET /metrics` exposes Prometheus-format metrics including: request count/duration by endpoint, browser operation count/duration by type, active browser sessions gauge, request queue depth per account, error counts by type
 - [x] **OBS-02**: An audit log table in SQLite records: timestamp, token_id, account_id, action (create/update/delete/sync), resource identifier, result (success/failure)
 - [x] **OBS-03**: Browser operations that fail produce a debug screenshot saved to a configurable directory for post-mortem analysis
 
@@ -231,11 +231,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REC-07 | Phase 3 | Complete (03-02) |
 | REC-08 | Phase 3 | Complete (03-02) |
 | REC-09 | Phase 3 | Complete |
-| SYNC-01 | Phase 5 | Pending |
-| SYNC-02 | Phase 5 | Pending |
-| SYNC-03 | Phase 5 | Pending |
-| SYNC-04 | Phase 5 | Pending |
-| SYNC-05 | Phase 5 | Pending |
+| SYNC-01 | Phase 5 | Complete (05-04) |
+| SYNC-02 | Phase 5 | Complete (05-04) |
+| SYNC-03 | Phase 5 | Complete (05-04) |
+| SYNC-04 | Phase 5 | Complete (05-04) |
+| SYNC-05 | Phase 5 | Complete (05-04) |
 | SYNC-06 | Phase 5 | Pending |
 | BIND-01 | Phase 6 | Pending |
 | BIND-02 | Phase 6 | Pending |
@@ -258,7 +258,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPS-04 | Phase 2 | Complete |
 | OPS-05 | Phase 4 | Complete |
 | OPS-06 | Phase 1 | Complete (01-01) |
-| OBS-01 | Phase 5 | Pending |
+| OBS-01 | Phase 5 | Complete |
 | OBS-02 | Phase 5 | Complete |
 | OBS-03 | Phase 4 | Complete |
 | RES-01 | Phase 4 | Complete |

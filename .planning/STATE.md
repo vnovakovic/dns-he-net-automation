@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 5 of 6 (Observability and Sync Engine)
-Plan: 3 of 5 in phase 5 (05-03 complete — audit log migration, audit package, 5 handler integrations)
+Plan: 4 of 5 in phase 5 (05-04 complete — reconcile diff engine with TDD)
 Status: In Progress
-Last activity: 2026-02-28 -- Plan 05-03 complete: audit_log migration + audit.Write() integrated into CreateZone, DeleteZone, CreateRecord, UpdateRecord, DeleteRecord
+Last activity: 2026-02-28 -- Plan 05-04 complete: DiffRecords + Apply in internal/reconcile; (Type,Name,Content)+SRV disambiguation key; ID carry-through on update; no-short-circuit Apply (SYNC-04); 13 tests pass, go vet clean
 
 Progress: [████████████] 80%
 
@@ -36,7 +36,7 @@ Progress: [████████████] 80%
 - Last 5 plans: 12 min, 15 min, 4 min, 2 min, 7 min
 - Trend: Consistent
 
-| 05-observability-sync-engine | 3/5 (in progress) | 2 min (P03) | - |
+| 05-observability-sync-engine | 4/5 (in progress) | 2 min (P04) | - |
 
 *Updated after each plan completion*
 
@@ -96,9 +96,18 @@ Recent decisions affecting current work:
 - [Phase 04-04]: VaultProvider.Client() accessor added — needed for vaultHealthFn closure in main.go; type assertion safe because only reached in cfg.VaultAddr != "" branch
 - [Phase 04-04]: Dockerfile non-root USER server after playwright install — playwright install --with-deps requires root (apt-get)
 - [Phase 04-04]: Test nil breakers safe for unit tests — all unit test paths return before breakers.Execute (validation/auth early exits)
+- [Phase 05-01]: Custom registry (prometheus.NewRegistry()) not DefaultRegisterer — avoids test panics from duplicate metric registration; promauto.With(reg) scopes all metrics to isolated registry
+- [Phase 05-01]: HTTP duration histogram buckets extended to 30s — DNS scraping takes 2-10s, default buckets miss tail latency
+- [Phase 05-01]: SyncOpsTotal (dnshe_sync_operations_total) added as 8th metric — per-operation sync visibility beyond what HTTP middleware captures
+- [Phase 05-01]: go mod tidy required after go get — transitive prometheus deps not checksummed by go get alone
 - [Phase 05-03]: Audit write occurs after browser op (success or failure both recorded); audit failure is non-fatal (slog.ErrorContext only)
 - [Phase 05-03]: error_msg uses any type for nullable mapping: nil for empty string, string value for error — avoids *string indirection
 - [Phase 05-03]: Resource format is 'zone:<id>' or 'record:<id>' for programmatic parsing in audit_log
+- [Phase 05-04]: Package name is reconcile (not sync) — sync collides with Go stdlib sync package
+- [Phase 05-04]: RecordKey uses (Type,Name,Content) base to support multi-value A records for same hostname; SRV adds Priority+Weight+Port for port/weight disambiguation
+- [Phase 05-04]: recordsEqual compares TTL, Priority, Weight, Port, Target, Dynamic — Content/Name/Type are in the key, ID intentionally differs between current (server-assigned) and desired (empty)
+- [Phase 05-04]: DiffRecords Update slice carries cur.ID into desired record — browser UpdateRecord call requires the existing record ID
+- [Phase 05-04]: Apply delete-before-add order avoids transient conflicts; make([]SyncResult, 0, ...) guarantees non-nil empty slice
 
 ### Pending Todos
 
@@ -112,5 +121,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 05-03-PLAN.md (audit_log migration, audit package, 5 handler integrations — CreateZone, DeleteZone, CreateRecord, UpdateRecord, DeleteRecord)
+Stopped at: Completed 05-01-PLAN.md (Prometheus metrics registry — Registry struct, NewRegistry(), Handler(), 8 metric vars, custom registry pattern with promauto.With(reg))
 Resume file: None
