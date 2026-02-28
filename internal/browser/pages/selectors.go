@@ -53,7 +53,8 @@ const (
 
 // Add zone form selectors.
 const (
-	SelectorAddZonePanel  = `div#add_zone`
-	SelectorAddZoneInput  = `input[name="add_domain"]`
-	SelectorAddZoneSubmit = `input[name="submit"][value="Add Domain!"]`
+	SelectorAddZoneTrigger = `a[onclick*="add_zone"]`
+	SelectorAddZonePanel   = `div#add_zone`
+	SelectorAddZoneInput   = `input[name="add_domain"]`
+	SelectorAddZoneSubmit  = `input[name="submit"][value="Add Domain!"]`
 )

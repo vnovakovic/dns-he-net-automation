@@ -72,6 +72,95 @@ func (zp *ZoneListPage) ListZones() ([]model.Zone, error) {
 	return zones, nil
 }
 
+// AddZone navigates to the zone list, opens the add-zone panel, fills in the domain
+// name, submits the form, and returns the newly created zone's ID.
+func (zp *ZoneListPage) AddZone(domainName string) (string, error) {
+	if err := zp.NavigateToZoneList(); err != nil {
+		return "", err
+	}
+
+	if err := zp.page.Locator(SelectorAddZoneTrigger).Click(); err != nil {
+		return "", fmt.Errorf("add zone %q: click trigger: %w", domainName, err)
+	}
+
+	if err := zp.page.Locator(SelectorAddZonePanel).WaitFor(); err != nil {
+		return "", fmt.Errorf("add zone %q: wait for panel: %w", domainName, err)
+	}
+
+	if err := zp.page.Locator(SelectorAddZoneInput).Fill(domainName); err != nil {
+		return "", fmt.Errorf("add zone %q: fill domain name: %w", domainName, err)
+	}
+
+	if err := zp.page.Locator(SelectorAddZoneSubmit).Click(); err != nil {
+		return "", fmt.Errorf("add zone %q: click submit: %w", domainName, err)
+	}
+
+	if err := zp.page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+		State: playwright.LoadStateNetworkidle,
+	}); err != nil {
+		return "", fmt.Errorf("add zone %q: wait for network idle: %w", domainName, err)
+	}
+
+	zoneID, err := zp.GetZoneID(domainName)
+	if err != nil {
+		return "", fmt.Errorf("add zone %q: look up new zone ID: %w", domainName, err)
+	}
+
+	return zoneID, nil
+}
+
+// DeleteZone deletes the zone with the given zoneID and zoneName from dns.he.net.
+// It registers a dialog handler BEFORE clicking the delete image, which is required
+// because dns.he.net uses prompt() (not confirm()) — the handler fills "DELETE" and
+// accepts the prompt. After deletion, it verifies the zone is no longer present.
+func (zp *ZoneListPage) DeleteZone(zoneID string, zoneName string) error {
+	if err := zp.NavigateToZoneList(); err != nil {
+		return err
+	}
+
+	// Register dialog handler BEFORE the click (CRITICAL).
+	// dns.he.net calls prompt() which fires synchronously on click.
+	// The handler must be registered pre-emptively.
+	// playwright-go v0.5700.1: use OnDialog, not On("dialog").
+	// Dialog.Accept(promptText ...string) accepts the prompt with the given text.
+	zp.page.OnDialog(func(dialog playwright.Dialog) {
+		_ = dialog.Accept("DELETE")
+	})
+
+	selector := fmt.Sprintf(`img[alt="delete"][value="%s"]`, zoneID)
+	if err := zp.page.Locator(selector).Click(); err != nil {
+		return fmt.Errorf("delete zone %q: click delete image: %w", zoneName, err)
+	}
+
+	if err := zp.page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+		State: playwright.LoadStateNetworkidle,
+	}); err != nil {
+		return fmt.Errorf("delete zone %q: wait for network idle: %w", zoneName, err)
+	}
+
+	// Verify deletion by checking that the zone is no longer present.
+	remainingID, err := zp.GetZoneID(zoneName)
+	if err != nil {
+		// GetZoneID returned an error — zone not found, deletion succeeded.
+		return nil
+	}
+	if remainingID != "" {
+		return fmt.Errorf("delete zone %q: zone still present after deletion", zoneName)
+	}
+	return nil
+}
+
+// GetZoneName returns the domain name for the zone with the given zoneID.
+// It looks up the img[alt="delete"][value=ZONE_ID] element and reads its name attribute.
+func (zp *ZoneListPage) GetZoneName(zoneID string) (string, error) {
+	selector := fmt.Sprintf(`img[alt="delete"][value="%s"]`, zoneID)
+	name, err := zp.page.Locator(selector).GetAttribute("name")
+	if err != nil {
+		return "", fmt.Errorf("get zone name for ID %q: %w", zoneID, err)
+	}
+	return name, nil
+}
+
 // GetZoneID returns the zone ID for the zone with the given name.
 // Uses the delete-image selector with a name attribute filter for direct lookup.
 func (zp *ZoneListPage) GetZoneID(zoneName string) (string, error) {
