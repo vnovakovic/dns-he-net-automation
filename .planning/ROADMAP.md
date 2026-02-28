@@ -70,7 +70,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md -- Zone page objects (AddZone, DeleteZone, GetZoneName) and zone API handlers (ListZones, CreateZone, DeleteZone)
 - [x] 03-02-PLAN.md -- Record page objects (ParseRecordRow, ListRecords, FindRecord) and record API handlers (List, Get, Create, Update, Delete) with idempotency
-- [ ] 03-03-PLAN.md -- Field validation (internal/api/validate), ?type/?name query filtering, WriteJSON helper, Makefile build-linux cross-compilation
+- [x] 03-03-PLAN.md -- Field validation (internal/api/validate), ?type/?name query filtering, WriteJSON helper, Makefile build-linux cross-compilation
 
 ### Phase 4: Production Hardening
 **Goal**: The service is production-ready with Vault credential storage, resilience against transient failures, rate limiting, and Docker deployment
@@ -81,13 +81,14 @@ Plans:
   2. If Vault is temporarily unreachable, existing cached credentials and active browser sessions continue to function (degraded mode)
   3. Transient browser failures (timeout, session expiry) are retried with exponential backoff (max 3 attempts), and a circuit breaker pauses an account after N consecutive failures
   4. Per-token and global rate limiting returns 429 with `Retry-After` header, and configurable inter-operation delay with jitter prevents HE rate limiting
-  5. The service ships as a Docker image based on `chromedp/headless-shell` and as a standalone static binary, with failed browser operations producing debug screenshots
-**Plans**: TBD
+  5. The service ships as a Docker image (ubuntu:noble + playwright chromium) and as standalone static binaries (amd64 + arm64), with failed browser operations producing debug screenshots
+**Plans**: 4 plans
 
 Plans:
-- [ ] 04-01: Vault client (KV v2, credential cache, AppRole + token auth, health check)
-- [ ] 04-02: Resilience layer (retry/backoff, circuit breaker, rate limiting, inter-operation delay with jitter)
-- [ ] 04-03: Docker image, standalone binary build, debug screenshots on failure
+- [ ] 04-01-PLAN.md -- VaultProvider (KV v2, TTL cache, stale fallback, token + AppRole auth) + Config extensions
+- [ ] 04-02-PLAN.md -- Resilience layer (retry/backoff wrapper, per-account circuit breaker, rate limiting middleware, inter-op jitter)
+- [ ] 04-03-PLAN.md -- Debug screenshots on failure (OBS-03) + fatal crash recovery path (BROWSER-09)
+- [ ] 04-04-PLAN.md -- Wiring (credential provider selection, resilience in handlers, health Vault check, Docker polish, Makefile)
 
 ### Phase 5: Observability + Sync Engine
 **Goal**: Operators have full visibility into service behavior via metrics and audit logs, and external systems can declare desired DNS state and have the service reconcile it
@@ -131,6 +132,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation + Browser Core | 3/3 | Complete | 2026-02-27 |
 | 2. API Layer + Authentication | 3/TBD | Complete    | 2026-02-28 |
 | 3. DNS Operations | 3/3 | Complete    | 2026-02-28 |
-| 4. Production Hardening | 0/3 | Not started | - |
+| 4. Production Hardening | 0/4 | Not started | - |
 | 5. Observability + Sync Engine | 0/3 | Not started | - |
 | 6. BIND Import/Export + Admin UI | 0/2 | Not started | - |
