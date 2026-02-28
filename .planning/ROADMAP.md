@@ -65,12 +65,12 @@ Plans:
   3. Record creation is idempotent (existing match by type+name+value returns 200, not 409) and record deletion is idempotent (already-deleted returns 204, not 404)
   4. Every record and zone response includes stable IDs, full field state, and consistent JSON schema suitable for Terraform state tracking
   5. API response time for read operations is under 10 seconds and for single write operations under 15 seconds including browser automation time
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: Zone page objects and zone API handlers (list, add, delete)
-- [ ] 03-02: Record page objects for all v1 types, record API handlers with idempotency
-- [ ] 03-03: Field validation, query filtering, performance verification, cross-compilation
+- [ ] 03-01-PLAN.md -- Zone page objects (AddZone, DeleteZone, GetZoneName) and zone API handlers (ListZones, CreateZone, DeleteZone)
+- [ ] 03-02-PLAN.md -- Record page objects (ParseRecordRow, ListRecords, FindRecord) and record API handlers (List, Get, Create, Update, Delete) with idempotency
+- [ ] 03-03-PLAN.md -- Field validation (internal/api/validate), ?type/?name query filtering, WriteJSON helper, Makefile build-linux cross-compilation
 
 ### Phase 4: Production Hardening
 **Goal**: The service is production-ready with Vault credential storage, resilience against transient failures, rate limiting, and Docker deployment
