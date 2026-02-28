@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** External systems can manage DNS records on dns.he.net via a REST API as if it were a first-class DNS provider, without any manual web interaction.
-**Current focus:** Phase 2: HTTP API Layer
+**Current focus:** Phase 3: DNS Operations
 
 ## Current Position
 
-Phase: 2 of 6 (HTTP API Layer)
-Plan: 3 of 5 in phase 2 (02-03 complete)
+Phase: 3 of 6 (DNS Operations)
+Plan: 1 of 3 in phase 3 (03-01 complete)
 Status: In Progress
-Last activity: 2026-02-28 -- Plan 02-03 complete, GET /healthz + JSON panic recovery + custom 404/405 + graceful shutdown hardening
+Last activity: 2026-02-28 -- Plan 03-01 complete, zone page object methods (AddZone/DeleteZone/GetZoneName) + zone API handlers (GET/POST/DELETE /api/v1/zones)
 
-Progress: [██████░░░░] 38%
+Progress: [███████░░░] 44%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 6 min
-- Total execution time: 0.53 hours
+- Total execution time: 0.65 hours
 
 **By Phase:**
 
@@ -29,9 +29,10 @@ Progress: [██████░░░░] 38%
 |-------|-------|-------|----------|
 | 01-foundation-browser-core | 3/3 | 25 min | 8 min |
 | 02-api-auth | 3/5 | 13 min | 4 min |
+| 03-dns-operations | 1/3 | 12 min | 12 min |
 
 **Recent Trend:**
-- Last 5 plans: 7 min, 9 min, 4 min, 6 min, 3 min
+- Last 5 plans: 9 min, 4 min, 6 min, 3 min, 12 min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -65,6 +66,10 @@ Recent decisions affecting current work:
 - [02-03]: Custom panic recovery replaces chiMiddleware.Recoverer -- chi default returns plain text 500; inline middleware calls response.WriteError for JSON error contract (API-04)
 - [02-03]: context.Background() for shutdownCtx -- signal context is already Done at shutdown time; using it as parent gives zero drain window; context.Background() provides full 30s
 - [02-03]: Browser health returns "not connected" for nil launcher -- guards nil pointer dereference and correctly signals degraded status
+- [03-01]: playwright-go v0.5700.1 Dialog API uses page.OnDialog(func(dialog playwright.Dialog)) not page.On("dialog", ...) -- typed method not generic event emitter
+- [03-01]: Dialog.Accept("DELETE") variadic form serves as both Fill+Accept in one call -- no separate Fill method exists in this API version
+- [03-01]: GetZoneID error return treated as zone-not-found for idempotency in CreateZone pre-check and DeleteZone verification
+- [03-01]: ZoneResponse.FetchedAt set to handler start time (before WithAccount) for consistent timestamps across list items
 
 ### Pending Todos
 
@@ -78,5 +83,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 02-03-PLAN.md (GET /healthz, JSON panic recovery, custom 404/405, graceful shutdown hardening)
+Stopped at: Completed 03-01-PLAN.md (zone page object AddZone/DeleteZone/GetZoneName + GET/POST/DELETE /api/v1/zones handlers)
 Resume file: None

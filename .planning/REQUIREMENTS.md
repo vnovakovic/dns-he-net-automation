@@ -47,10 +47,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Zone Operations
 
-- [ ] **ZONE-01**: `GET /api/v1/zones` returns the list of all zones managed by the authenticated account, scraped live from dns.he.net
-- [ ] **ZONE-02**: Each zone in the response includes a stable zone identifier (as used by dns.he.net internally) and the domain name
-- [ ] **ZONE-03**: `POST /api/v1/zones` adds a new zone (domain) to the account on dns.he.net
-- [ ] **ZONE-04**: `DELETE /api/v1/zones/{zone_id}` removes a zone from the account on dns.he.net
+- [x] **ZONE-01**: `GET /api/v1/zones` returns the list of all zones managed by the authenticated account, scraped live from dns.he.net
+- [x] **ZONE-02**: Each zone in the response includes a stable zone identifier (as used by dns.he.net internally) and the domain name
+- [x] **ZONE-03**: `POST /api/v1/zones` adds a new zone (domain) to the account on dns.he.net
+- [x] **ZONE-04**: `DELETE /api/v1/zones/{zone_id}` removes a zone from the account on dns.he.net
 
 ### DNS Record CRUD
 
@@ -93,7 +93,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **API-02**: All request and response bodies are JSON with `Content-Type: application/json`
 - [x] **API-03**: Proper HTTP status codes are returned: 200 OK, 201 Created, 204 No Content, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 429 Too Many Requests, 500 Internal Server Error
 - [x] **API-04**: Error responses follow a consistent schema: `{"error": "<message>", "code": "<machine_readable_code>"}` with actionable messages (e.g., "Record A foo.example.com already exists", not "Internal Server Error")
-- [ ] **API-05**: Every API response for a record or zone includes stable resource IDs suitable for Terraform state tracking
+- [x] **API-05**: Every API response for a record or zone includes stable resource IDs suitable for Terraform state tracking
 - [ ] **API-06**: `GET` endpoints for records support query parameter filtering by record type and/or name
 - [x] **API-07**: All authenticated endpoints require `Authorization: Bearer <token>` header
 
@@ -141,7 +141,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Compatibility
 
-- [ ] **COMPAT-01**: All record and zone responses include stable IDs, full field state, and consistent JSON schemas to support a future Terraform provider without API changes
+- [x] **COMPAT-01**: All record and zone responses include stable IDs, full field state, and consistent JSON schemas to support a future Terraform provider without API changes
 - [ ] **COMPAT-02**: Record create is idempotent (returns existing on conflict) and delete is idempotent (204 on missing) to support Terraform and Ansible retry semantics
 - [ ] **COMPAT-03**: The Go binary compiles on Linux amd64 and arm64; the Docker image targets Linux amd64
 
@@ -218,10 +218,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TOKEN-05 | Phase 2 | Complete |
 | TOKEN-06 | Phase 2 | Complete |
 | TOKEN-07 | Phase 2 | Complete |
-| ZONE-01 | Phase 3 | Pending |
-| ZONE-02 | Phase 3 | Pending |
-| ZONE-03 | Phase 3 | Pending |
-| ZONE-04 | Phase 3 | Pending |
+| ZONE-01 | Phase 3 | Complete |
+| ZONE-02 | Phase 3 | Complete |
+| ZONE-03 | Phase 3 | Complete |
+| ZONE-04 | Phase 3 | Complete |
 | REC-01 | Phase 3 | Pending |
 | REC-02 | Phase 3 | Pending |
 | REC-03 | Phase 3 | Pending |
@@ -249,7 +249,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-02 | Phase 2 | Complete |
 | API-03 | Phase 2 | Complete |
 | API-04 | Phase 2 | Complete |
-| API-05 | Phase 3 | Pending |
+| API-05 | Phase 3 | Complete |
 | API-06 | Phase 3 | Pending |
 | API-07 | Phase 2 | Complete |
 | OPS-01 | Phase 2 | Complete |
@@ -274,7 +274,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REL-01 | Phase 1 | Complete (01-01) |
 | REL-02 | Phase 1 | Complete (01-02) |
 | REL-03 | Phase 1 | Complete (01-02) |
-| COMPAT-01 | Phase 3 | Pending |
+| COMPAT-01 | Phase 3 | Complete |
 | COMPAT-02 | Phase 3 | Pending |
 | COMPAT-03 | Phase 3 | Pending |
 
