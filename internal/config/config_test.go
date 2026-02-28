@@ -10,6 +10,7 @@ import (
 
 func TestLoad_Defaults(t *testing.T) {
 	// Set only the required fields; all others should use defaults.
+	// HE_ACCOUNTS is now optional (VaultAddr may be set instead).
 	t.Setenv("HE_ACCOUNTS", `[{"id":"test","username":"user","password":"pass"}]`)
 	t.Setenv("JWT_SECRET", "test-secret-at-least-32-chars-long")
 
@@ -26,18 +27,36 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "info", cfg.LogLevel)
 	assert.Equal(t, 1.5, cfg.MinOperationDelaySec)
 	assert.Equal(t, 1800, cfg.SessionMaxAgeSec)
+
+	// Vault defaults (VAULT-01..06)
+	assert.Equal(t, "", cfg.VaultAddr)
+	assert.Equal(t, "token", cfg.VaultAuthMethod)
+	assert.Equal(t, "", cfg.VaultToken)
+	assert.Equal(t, "secret", cfg.VaultMountPath)
+	assert.Equal(t, "dns-he-net/%s", cfg.VaultSecretPathTmpl)
+	assert.Equal(t, 300, cfg.VaultCredentialTTLSec)
+
+	// Resilience defaults (RES-02, RES-03)
+	assert.Equal(t, 100, cfg.RateLimitPerTokenRPM)
+	assert.Equal(t, 1000, cfg.RateLimitGlobalRPM)
+	assert.Equal(t, uint32(5), cfg.CircuitBreakerMaxFailures)
+	assert.Equal(t, 30, cfg.CircuitBreakerTimeoutSec)
+
+	// Screenshot default (OBS-03): empty = disabled
+	assert.Equal(t, "", cfg.ScreenshotDir)
+
+	// Jitter default (BROWSER-08)
+	assert.Equal(t, 3.0, cfg.MaxOperationDelaySec)
 }
 
 func TestLoad_MissingRequired(t *testing.T) {
-	// Ensure HE_ACCOUNTS is not set -- Load() must return an error.
+	// HE_ACCOUNTS is now optional (Vault may be configured instead).
+	// JWT_SECRET remains required -- ensure Load() fails when it is absent.
 	t.Setenv("HE_ACCOUNTS", "")
+	t.Setenv("JWT_SECRET", "")
 
-	// caarlos0/env treats empty string as "not set" for required fields.
-	// We also need to ensure that the env var is absent, not just empty.
-	// t.Setenv sets to empty string; unset is tested via the env package behavior.
-	// The required tag means a missing or empty value returns an error.
 	_, err := config.Load()
-	assert.Error(t, err, "Load() should fail when HE_ACCOUNTS is empty or missing")
+	assert.Error(t, err, "Load() should fail when JWT_SECRET is empty or missing")
 }
 
 func TestLoad_CustomValues(t *testing.T) {

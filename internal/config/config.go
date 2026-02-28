@@ -16,11 +16,10 @@ type Config struct {
 	// DBPath is the SQLite database file path (default: dns-he-net.db).
 	DBPath string `env:"DB_PATH" envDefault:"dns-he-net.db"`
 
-	// HEAccountsJSON is a JSON array of HE.net account credentials (required, must not be empty).
+	// HEAccountsJSON is used when VAULT_ADDR is not set. Optional when Vault is configured.
 	// Format: [{"id":"prod","username":"user","password":"pass"}]
 	// SECURITY: This field contains credentials -- never log its value (SEC-03).
-	// notEmpty ensures the var must exist AND be non-empty (required only checks existence).
-	HEAccountsJSON string `env:"HE_ACCOUNTS,required,notEmpty"`
+	HEAccountsJSON string `env:"HE_ACCOUNTS"`
 
 	// PlaywrightHeadless controls whether Chromium runs in headless mode (default: true).
 	// Set to false during development to see the browser window.
@@ -50,6 +49,32 @@ type Config struct {
 	// JWTSecret is the HMAC-SHA256 signing secret for JWT bearer tokens.
 	// SECURITY: Must be at least 32 characters. Never log this value (SEC-02).
 	JWTSecret string `env:"JWT_SECRET,required,notEmpty"`
+
+	// Vault configuration (VAULT-01..06)
+	// When VaultAddr is non-empty, VaultProvider is used instead of EnvProvider.
+	// SECURITY: VaultToken, AppRoleSecretID are credentials -- never log their values.
+
+	VaultAddr           string `env:"VAULT_ADDR"`
+	VaultAuthMethod     string `env:"VAULT_AUTH_METHOD"          envDefault:"token"`
+	VaultToken          string `env:"VAULT_TOKEN"`
+	VaultAppRoleRoleID  string `env:"VAULT_APPROLE_ROLE_ID"`
+	VaultAppRoleSecretID string `env:"VAULT_APPROLE_SECRET_ID"`
+	VaultMountPath      string `env:"VAULT_MOUNT_PATH"           envDefault:"secret"`
+	VaultSecretPathTmpl string `env:"VAULT_SECRET_PATH_TMPL"     envDefault:"dns-he-net/%s"`
+	VaultCredentialTTLSec int  `env:"VAULT_CREDENTIAL_TTL_SEC"   envDefault:"300"`
+
+	// Resilience configuration (RES-02, RES-03)
+	RateLimitPerTokenRPM     int    `env:"RATE_LIMIT_PER_TOKEN_RPM"     envDefault:"100"`
+	RateLimitGlobalRPM       int    `env:"RATE_LIMIT_GLOBAL_RPM"        envDefault:"1000"`
+	CircuitBreakerMaxFailures uint32 `env:"CIRCUIT_BREAKER_MAX_FAILURES" envDefault:"5"`
+	CircuitBreakerTimeoutSec  int    `env:"CIRCUIT_BREAKER_TIMEOUT_SEC"  envDefault:"30"`
+
+	// Screenshot configuration (OBS-03)
+	// Empty string disables screenshots.
+	ScreenshotDir string `env:"SCREENSHOT_DIR"`
+
+	// Maximum inter-operation delay for jitter (BROWSER-08)
+	MaxOperationDelaySec float64 `env:"MAX_OPERATION_DELAY_SEC" envDefault:"3.0"`
 }
 
 // Load reads configuration from environment variables and returns a populated Config.
