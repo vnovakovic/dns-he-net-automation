@@ -13,7 +13,7 @@ This roadmap delivers a Go REST API that wraps dns.he.net's web interface via he
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation + Browser Core** - Project scaffolding, Chromium lifecycle, HE login/session management, page-object layer, per-account mutex, SQLite schema
-- [ ] **Phase 2: API Layer + Authentication** - chi router, bearer token system, auth middleware, account/token management endpoints, health check, structured logging
+- [x] **Phase 2: API Layer + Authentication** - chi router, bearer token system, auth middleware, account/token management endpoints, health check, structured logging (completed 2026-02-28)
 - [ ] **Phase 3: DNS Operations** - Zone CRUD, record CRUD for all v1 types (A, AAAA, CNAME, MX, TXT, SRV, CAA, NS), idempotency, field validation
 - [ ] **Phase 4: Production Hardening** - Vault credential storage, retry/backoff/circuit breaker, rate limiting, debug screenshots, Docker image, binary builds
 - [ ] **Phase 5: Observability + Sync Engine** - Prometheus metrics, audit log, sync/reconcile with dry-run support
@@ -129,7 +129,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation + Browser Core | 3/3 | Complete | 2026-02-27 |
-| 2. API Layer + Authentication | 3/TBD | In progress | - |
+| 2. API Layer + Authentication | 3/TBD | Complete    | 2026-02-28 |
 | 3. DNS Operations | 0/3 | Not started | - |
 | 4. Production Hardening | 0/3 | Not started | - |
 | 5. Observability + Sync Engine | 0/3 | Not started | - |
