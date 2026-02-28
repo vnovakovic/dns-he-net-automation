@@ -83,6 +83,16 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 			r.Get("/", handlers.ListZones(db, sm))
 			r.With(middleware.RequireAdmin).Post("/", handlers.CreateZone(db, sm))
 			r.With(middleware.RequireAdmin).Delete("/{zoneID}", handlers.DeleteZone(db, sm))
+
+			r.Route("/{zoneID}/records", func(r chi.Router) {
+				r.Get("/", handlers.ListRecords(db, sm))
+				r.With(middleware.RequireAdmin).Post("/", handlers.CreateRecord(db, sm))
+				r.Route("/{recordID}", func(r chi.Router) {
+					r.Get("/", handlers.GetRecord(db, sm))
+					r.With(middleware.RequireAdmin).Put("/", handlers.UpdateRecord(db, sm))
+					r.With(middleware.RequireAdmin).Delete("/", handlers.DeleteRecord(db, sm))
+				})
+			})
 		})
 	})
 
