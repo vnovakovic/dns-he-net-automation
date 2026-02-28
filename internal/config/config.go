@@ -75,6 +75,16 @@ type Config struct {
 
 	// Maximum inter-operation delay for jitter (BROWSER-08)
 	MaxOperationDelaySec float64 `env:"MAX_OPERATION_DELAY_SEC" envDefault:"3.0"`
+
+	// Admin UI authentication (UI-04).
+	// Both AdminUsername and AdminPassword are required when the admin UI is accessed.
+	// ADMIN_SESSION_KEY is separate from JWT_SECRET — rotating the JWT secret must not
+	// invalidate admin sessions. AdminSessionKey should be a hex-encoded 32-byte value.
+	// (RESEARCH.md open question 2 resolution: separate keys for separate auth domains)
+	// SECURITY: Never log these values (SEC-03).
+	AdminUsername   string `env:"ADMIN_USERNAME"`
+	AdminPassword   string `env:"ADMIN_PASSWORD"`
+	AdminSessionKey string `env:"ADMIN_SESSION_KEY"` // hex-encoded 32-byte key for HMAC session signing
 }
 
 // Load reads configuration from environment variables and returns a populated Config.
