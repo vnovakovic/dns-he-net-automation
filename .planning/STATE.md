@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 4 of 6 (Production Hardening)
-Plan: 3 of 4 in phase 4 (04-03 complete)
-Status: In Progress
-Last activity: 2026-02-28 -- Plan 04-03 complete, SaveDebugScreenshot + screenshotDir in SessionManager + BROWSER-09 crash recovery logging
+Plan: 4 of 4 in phase 4 (04-04 complete — phase complete)
+Status: Phase 4 Complete
+Last activity: 2026-02-28 -- Plan 04-04 complete, all Phase 4 components wired: VaultProvider selection, circuit breaker + retry on browser ops, rate limiting, /healthz vault status, Dockerfile OCI labels + non-root user, arm64 cross-compile
 
-Progress: [█████████░] 68%
+Progress: [██████████] 75%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 11
 - Average duration: 5 min
-- Total execution time: 0.99 hours
+- Total execution time: 1.1 hours
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: [█████████░] 68%
 | 01-foundation-browser-core | 3/3 | 25 min | 8 min |
 | 02-api-auth | 3/5 | 13 min | 4 min |
 | 03-dns-operations | 3/3 | 30 min | 10 min |
-| 04-production-hardening | 3/4 | 11 min | 4 min |
+| 04-production-hardening | 4/4 | 18 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 3 min, 12 min, 15 min, 4 min, 2 min
+- Last 5 plans: 12 min, 15 min, 4 min, 2 min, 7 min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -91,6 +91,9 @@ Recent decisions affecting current work:
 - [Phase 04-03]: playwright-go v0.5700.1 Screenshot API is variadic PageScreenshotOptions value not pointer — page.Screenshot(opts) not page.Screenshot(&opts)
 - [Phase 04-03]: screenshotDir added as final parameter to NewSessionManager — preserves ordering with prior maxOpDelay addition from Plan 02
 - [Phase 04-03]: SaveDebugScreenshot has no test file — filesystem side-effect helper; verified via build, vet, and session.go integration
+- [Phase 04-04]: VaultProvider.Client() accessor added — needed for vaultHealthFn closure in main.go; type assertion safe because only reached in cfg.VaultAddr != "" branch
+- [Phase 04-04]: Dockerfile non-root USER server after playwright install — playwright install --with-deps requires root (apt-get)
+- [Phase 04-04]: Test nil breakers safe for unit tests — all unit test paths return before breakers.Execute (validation/auth early exits)
 
 ### Pending Todos
 
@@ -104,5 +107,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 04-03-PLAN.md (SaveDebugScreenshot + screenshotDir in SessionManager + BROWSER-09 crash recovery logging)
+Stopped at: Completed 04-04-PLAN.md (all Phase 4 components wired — VaultProvider, circuit breakers, rate limiting, healthz vault status, Docker OCI labels, arm64 cross-compile)
 Resume file: None

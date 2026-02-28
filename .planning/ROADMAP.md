@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation + Browser Core** - Project scaffolding, Chromium lifecycle, HE login/session management, page-object layer, per-account mutex, SQLite schema
 - [x] **Phase 2: API Layer + Authentication** - chi router, bearer token system, auth middleware, account/token management endpoints, health check, structured logging (completed 2026-02-28)
 - [x] **Phase 3: DNS Operations** - Zone CRUD, record CRUD for all v1 types (A, AAAA, CNAME, MX, TXT, SRV, CAA, NS), idempotency, field validation (completed 2026-02-28)
-- [ ] **Phase 4: Production Hardening** - Vault credential storage, retry/backoff/circuit breaker, rate limiting, debug screenshots, Docker image, binary builds
+- [x] **Phase 4: Production Hardening** - Vault credential storage, retry/backoff/circuit breaker, rate limiting, debug screenshots, Docker image, binary builds (completed 2026-02-28)
 - [ ] **Phase 5: Observability + Sync Engine** - Prometheus metrics, audit log, sync/reconcile with dry-run support
 - [ ] **Phase 6: BIND Import/Export + Admin UI** - BIND zone file import/export via miekg/dns, embedded templ+htmx admin panel
 
@@ -132,6 +132,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation + Browser Core | 3/3 | Complete | 2026-02-27 |
 | 2. API Layer + Authentication | 3/TBD | Complete    | 2026-02-28 |
 | 3. DNS Operations | 3/3 | Complete    | 2026-02-28 |
-| 4. Production Hardening | 3/4 | In Progress|  |
+| 4. Production Hardening | 4/4 | Complete   | 2026-02-28 |
 | 5. Observability + Sync Engine | 0/3 | Not started | - |
 | 6. BIND Import/Export + Admin UI | 0/2 | Not started | - |
