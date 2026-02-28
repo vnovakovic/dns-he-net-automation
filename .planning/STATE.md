@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** External systems can manage DNS records on dns.he.net via a REST API as if it were a first-class DNS provider, without any manual web interaction.
-**Current focus:** Phase 3: DNS Operations
+**Current focus:** Phase 4: Production Hardening
 
 ## Current Position
 
-Phase: 3 of 6 (DNS Operations)
-Plan: 3 of 3 in phase 3 (03-03 complete)
-Status: Phase Complete
-Last activity: 2026-02-28 -- Plan 03-03 complete, ValidateRecord (41 tests) + ?type/?name query filters + response.WriteJSON + Makefile build-linux
+Phase: 4 of 6 (Production Hardening)
+Plan: 2 of 4 in phase 4 (04-02 complete)
+Status: In Progress
+Last activity: 2026-02-28 -- Plan 04-02 complete, resilience layer: WithRetry + BreakerRegistry + PerTokenRateLimit + GlobalRateLimit + SessionManager jitter
 
-Progress: [█████████░] 60%
+Progress: [█████████░] 65%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 6 min
-- Total execution time: 0.90 hours
+- Total plans completed: 9
+- Average duration: 5 min
+- Total execution time: 0.97 hours
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [█████████░] 60%
 | 01-foundation-browser-core | 3/3 | 25 min | 8 min |
 | 02-api-auth | 3/5 | 13 min | 4 min |
 | 03-dns-operations | 3/3 | 30 min | 10 min |
+| 04-production-hardening | 2/4 | 9 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 4 min, 6 min, 3 min, 12 min, 15 min
+- Last 5 plans: 6 min, 3 min, 12 min, 15 min, 4 min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -78,6 +79,10 @@ Recent decisions affecting current work:
 - [03-03]: ?type filter uses strings.ToUpper for case-insensitive matching; ?name filter uses strings.EqualFold (DNS names are case-insensitive)
 - [03-03]: WriteJSON added to response package following existing WriteError pattern; all handler success paths migrated
 - [03-03]: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 cross-compilation verified — modernc.org/sqlite is pure Go, no CGO needed
+- [04-02]: isTransientBrowserError excludes Vault credential errors — those are handled by stale cache (research Pitfall 5), not retry loops
+- [04-02]: BreakerRegistry.Execute wraps ErrOpenState into descriptive message rather than exposing gobreaker error directly — cleaner handler layer mapping to 503
+- [04-02]: PerTokenRateLimit falls back to RemoteAddr when no Bearer token — safe to register even before BearerAuth
+- [04-02]: math/rand used for jitter (not crypto/rand) — jitter is rate-limiting anti-fingerprinting, not cryptographic randomness
 
 ### Pending Todos
 
@@ -91,5 +96,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 03-03-PLAN.md (ValidateRecord with 41 tests + ?type/?name filters in ListRecords + response.WriteJSON + Makefile build-linux; Phase 3 complete)
+Stopped at: Completed 04-02-PLAN.md (resilience layer: WithRetry + BreakerRegistry + PerTokenRateLimit + GlobalRateLimit + SessionManager jitter)
 Resume file: None

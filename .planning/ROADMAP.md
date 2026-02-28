@@ -132,6 +132,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation + Browser Core | 3/3 | Complete | 2026-02-27 |
 | 2. API Layer + Authentication | 3/TBD | Complete    | 2026-02-28 |
 | 3. DNS Operations | 3/3 | Complete    | 2026-02-28 |
-| 4. Production Hardening | 0/4 | Not started | - |
+| 4. Production Hardening | 2/4 | In Progress|  |
 | 5. Observability + Sync Engine | 0/3 | Not started | - |
 | 6. BIND Import/Export + Admin UI | 0/2 | Not started | - |

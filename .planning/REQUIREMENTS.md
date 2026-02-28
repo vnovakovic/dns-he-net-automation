@@ -16,7 +16,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **BROWSER-05**: Browser sessions detect stale/expired state and automatically re-authenticate before the next operation
 - [x] **BROWSER-06**: Every browser operation has a configurable timeout (default 30s) — a hung page does not block the account queue indefinitely
 - [ ] **BROWSER-07**: All CSS selectors and form interactions are encapsulated in page-object files under `internal/browser/pages/` — no selectors leak into handlers or service code
-- [ ] **BROWSER-08**: Configurable inter-operation delay with jitter (default 2-3s range) to avoid triggering dns.he.net rate limiting or bot detection
+- [x] **BROWSER-08**: Configurable inter-operation delay with jitter (default 2-3s range) to avoid triggering dns.he.net rate limiting or bot detection
 - [ ] **BROWSER-09**: On fatal browser error (crash, unrecoverable state), the session is automatically restarted with a fresh Chromium context and re-login
 
 ### Vault Integration
@@ -114,9 +114,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Resilience
 
-- [ ] **RES-01**: Transient browser operation failures (timeout, network error, session expiry) are retried with exponential backoff and jitter (max 3 attempts)
-- [ ] **RES-02**: Per-token and global rate limiting returns 429 with `Retry-After` header when thresholds are exceeded
-- [ ] **RES-03**: A circuit breaker pauses all operations for an account after N consecutive failures (configurable, default 5), with automatic recovery after a backoff period
+- [x] **RES-01**: Transient browser operation failures (timeout, network error, session expiry) are retried with exponential backoff and jitter (max 3 attempts)
+- [x] **RES-02**: Per-token and global rate limiting returns 429 with `Retry-After` header when thresholds are exceeded
+- [x] **RES-03**: A circuit breaker pauses all operations for an account after N consecutive failures (configurable, default 5), with automatic recovery after a backoff period
 
 ## Non-Functional Requirements
 
@@ -199,7 +199,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BROWSER-05 | Phase 1 | Pending |
 | BROWSER-06 | Phase 1 | Complete (01-02) |
 | BROWSER-07 | Phase 1 | Pending |
-| BROWSER-08 | Phase 4 | Pending |
+| BROWSER-08 | Phase 4 | Complete |
 | BROWSER-09 | Phase 4 | Pending |
 | VAULT-01 | Phase 4 | Pending |
 | VAULT-02 | Phase 4 | Pending |
@@ -261,9 +261,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OBS-01 | Phase 5 | Pending |
 | OBS-02 | Phase 5 | Pending |
 | OBS-03 | Phase 4 | Pending |
-| RES-01 | Phase 4 | Pending |
-| RES-02 | Phase 4 | Pending |
-| RES-03 | Phase 4 | Pending |
+| RES-01 | Phase 4 | Complete |
+| RES-02 | Phase 4 | Complete |
+| RES-03 | Phase 4 | Complete |
 | PERF-01 | Phase 3 | Complete |
 | PERF-02 | Phase 3 | Complete |
 | PERF-03 | Phase 3 | Complete |
