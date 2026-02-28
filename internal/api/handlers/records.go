@@ -134,7 +134,7 @@ func ListRecords(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Br
 
 		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
-				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+				return sm.WithAccount(ctx, claims.AccountID, "list_records", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 					list, err := zl.ListRecords(zoneID)
 					if err != nil {
@@ -211,7 +211,7 @@ func GetRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Brea
 
 		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
-				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+				return sm.WithAccount(ctx, claims.AccountID, "find_record", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 					records, err := zl.ListRecords(zoneID)
 					if err != nil {
@@ -296,7 +296,7 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 
 		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
-				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+				return sm.WithAccount(ctx, claims.AccountID, "create_record", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 
 					// Idempotency pre-check: find an existing identical record before creating.
@@ -427,7 +427,7 @@ func UpdateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 
 		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
-				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+				return sm.WithAccount(ctx, claims.AccountID, "update_record", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 
 					// Navigate and verify the record exists before attempting edit.
@@ -525,7 +525,7 @@ func DeleteRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 
 		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
-				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+				return sm.WithAccount(ctx, claims.AccountID, "delete_record", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 
 					if err := zl.NavigateToZone(zoneID); err != nil {

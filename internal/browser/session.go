@@ -11,6 +11,7 @@ import (
 	playwright "github.com/playwright-community/playwright-go"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
 	"github.com/vnovakov/dns-he-net-automation/internal/credential"
+	"github.com/vnovakov/dns-he-net-automation/internal/metrics"
 )
 
 // AccountSession holds the browser state for one HE.net account.
@@ -42,7 +43,8 @@ type SessionManager struct {
 	reloginAge    time.Duration
 	minOpDelay    time.Duration
 	maxOpDelay    time.Duration
-	screenshotDir string // OBS-03: directory for debug screenshots; empty = disabled
+	screenshotDir string           // OBS-03: directory for debug screenshots; empty = disabled
+	metrics       *metrics.Registry // OBS-01: nil-guarded; pass nil for unit tests
 }
 
 // NewSessionManager creates a SessionManager.
@@ -54,11 +56,13 @@ type SessionManager struct {
 //   - minOpDelay: minimum delay between operations on the same account (BROWSER-08)
 //   - maxOpDelay: maximum delay between operations on the same account (BROWSER-08 jitter upper bound)
 //   - screenshotDir: directory for debug screenshots on failure; empty string disables screenshots (OBS-03)
+//   - reg: Prometheus metrics registry for instrumentation (OBS-01); pass nil to disable (unit tests)
 func NewSessionManager(
 	launcher *Launcher,
 	credProvider credential.Provider,
 	queueTimeout, opTimeout, reloginAge, minOpDelay, maxOpDelay time.Duration,
 	screenshotDir string,
+	reg *metrics.Registry,
 ) *SessionManager {
 	return &SessionManager{
 		launcher:      launcher,
@@ -70,6 +74,7 @@ func NewSessionManager(
 		minOpDelay:    minOpDelay,
 		maxOpDelay:    maxOpDelay,
 		screenshotDir: screenshotDir,
+		metrics:       reg,
 	}
 }
 
@@ -103,13 +108,21 @@ func (sm *SessionManager) getOrCreateSession(accountID string) *AccountSession {
 // WithAccount acquires the per-account mutex with a queue timeout, ensures a healthy session,
 // enforces the minimum inter-operation delay, and calls op with the active page.
 //
+// opType is a fine-grained label for Prometheus metrics (e.g. "list_zones", "create_record").
+// It is recorded in dnshe_browser_operations_total and dnshe_browser_operation_duration_seconds.
+//
 // Returns:
 //   - ErrQueueTimeout if the mutex is not acquired within queueTimeout
 //   - ctx.Err() if the caller's context is cancelled while waiting
 //   - A wrapped ErrSessionUnhealthy if session recovery fails
 //   - The result of op(page)
-func (sm *SessionManager) WithAccount(ctx context.Context, accountID string, op func(playwright.Page) error) error {
+func (sm *SessionManager) WithAccount(ctx context.Context, accountID string, opType string, op func(playwright.Page) error) error {
 	session := sm.getOrCreateSession(accountID)
+
+	// Queue depth: increment while waiting to acquire the per-account mutex (OBS-01).
+	if sm.metrics != nil {
+		sm.metrics.QueueDepth.WithLabelValues(accountID).Inc()
+	}
 
 	// Queue with timeout using goroutine-based lock acquisition.
 	//
@@ -140,16 +153,25 @@ func (sm *SessionManager) WithAccount(ctx context.Context, accountID string, op 
 
 	select {
 	case <-acquired:
-		// Successfully acquired the lock.
+		// Successfully acquired the lock. Decrement queue depth — no longer waiting.
+		if sm.metrics != nil {
+			sm.metrics.QueueDepth.WithLabelValues(accountID).Dec()
+		}
 		defer session.mu.Unlock()
 
 	case <-time.After(sm.queueTimeout):
 		// Timed out. Signal goroutine to release the lock when it acquires it.
+		if sm.metrics != nil {
+			sm.metrics.QueueDepth.WithLabelValues(accountID).Dec()
+		}
 		close(done)
 		return ErrQueueTimeout
 
 	case <-ctx.Done():
 		// Caller cancelled. Signal goroutine to release the lock when it acquires it.
+		if sm.metrics != nil {
+			sm.metrics.QueueDepth.WithLabelValues(accountID).Dec()
+		}
 		close(done)
 		return ctx.Err()
 	}
@@ -185,7 +207,22 @@ func (sm *SessionManager) WithAccount(ctx context.Context, accountID string, op 
 	}
 	session.lastOp = time.Now()
 
-	return op(session.page)
+	// Record start time for op duration measurement (OBS-01).
+	start := time.Now()
+	err := op(session.page)
+
+	// Instrument browser operation: count and duration, labelled by opType and result.
+	// CRITICAL: measurement occurs AFTER op returns — measures actual operation time (OBS-01).
+	if sm.metrics != nil {
+		result := "success"
+		if err != nil {
+			result = "error"
+		}
+		sm.metrics.BrowserOpsTotal.WithLabelValues(opType, result).Inc()
+		sm.metrics.BrowserOpDuration.WithLabelValues(opType).Observe(time.Since(start).Seconds())
+	}
+
+	return err
 }
 
 // createBrowserSession creates a new BrowserContext + Page and logs in to dns.he.net.
@@ -228,6 +265,12 @@ func (sm *SessionManager) createBrowserSession(ctx context.Context, session *Acc
 	session.page = page
 	session.lastLogin = time.Now()
 	session.healthy = true
+
+	// Track active browser sessions gauge (OBS-01).
+	if sm.metrics != nil {
+		sm.metrics.ActiveSessions.Inc()
+	}
+
 	return nil
 }
 
@@ -238,6 +281,11 @@ func (sm *SessionManager) closeBrowserContext(session *AccountSession) {
 		session.ctx.Close() //nolint:errcheck
 		session.ctx = nil
 		session.page = nil
+
+		// Track active browser sessions gauge (OBS-01).
+		if sm.metrics != nil {
+			sm.metrics.ActiveSessions.Dec()
+		}
 	}
 }
 

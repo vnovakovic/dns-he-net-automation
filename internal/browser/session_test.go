@@ -30,6 +30,7 @@ func newTestSessionManager(queueTimeout, opTimeout time.Duration) *SessionManage
 		0,              // minOpDelay: no delay for tests
 		0,              // maxOpDelay: no delay for tests
 		"",             // screenshotDir: disabled in tests (OBS-03)
+		nil,            // metrics: nil for unit tests (OBS-01 nil guard)
 	)
 }
 
@@ -88,7 +89,7 @@ func TestWithAccount_QueueTimeout(t *testing.T) {
 	defer session.mu.Unlock()
 
 	ctx := context.Background()
-	err := sm.WithAccount(ctx, "locked-account", func(playwright.Page) error {
+	err := sm.WithAccount(ctx, "locked-account", "test_op", func(playwright.Page) error {
 		return nil
 	})
 
@@ -114,7 +115,7 @@ func TestWithAccount_ContextCancellation(t *testing.T) {
 		cancel()
 	}()
 
-	err := sm.WithAccount(ctx, "cancel-account", func(playwright.Page) error {
+	err := sm.WithAccount(ctx, "cancel-account", "test_op", func(playwright.Page) error {
 		return nil
 	})
 
@@ -138,7 +139,7 @@ func TestWithAccount_Serialization(t *testing.T) {
 		i := i
 		go func() {
 			defer wg.Done()
-			err := sm.WithAccount(context.Background(), "shared-account", func(playwright.Page) error {
+			err := sm.WithAccount(context.Background(), "shared-account", "test_op", func(playwright.Page) error {
 				mu.Lock()
 				execOrder = append(execOrder, i)
 				mu.Unlock()
@@ -162,7 +163,7 @@ func TestWithAccount_OperationError(t *testing.T) {
 	sm := newTestSessionManager(5*time.Second, 10*time.Second)
 	expectedErr := errors.New("operation failed")
 
-	err := sm.WithAccount(context.Background(), "acct1", func(playwright.Page) error {
+	err := sm.WithAccount(context.Background(), "acct1", "test_op", func(playwright.Page) error {
 		return expectedErr
 	})
 

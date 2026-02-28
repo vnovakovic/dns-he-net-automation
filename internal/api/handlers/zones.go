@@ -54,7 +54,7 @@ func ListZones(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Brea
 
 		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
-				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+				return sm.WithAccount(ctx, claims.AccountID, "list_zones", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 					if err := zl.NavigateToZoneList(); err != nil {
 						return err
@@ -141,7 +141,7 @@ func CreateZone(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Bre
 
 		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
-				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+				return sm.WithAccount(ctx, claims.AccountID, "create_zone", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 
 					// Idempotency pre-check: if zone already exists, return it without creating.
@@ -244,7 +244,7 @@ func DeleteZone(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Bre
 
 		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
-				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+				return sm.WithAccount(ctx, claims.AccountID, "delete_zone", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 
 					// Idempotency: look up zone name. If not found, zone is already gone — success.
