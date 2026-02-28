@@ -9,8 +9,9 @@ import (
 )
 
 func TestLoad_Defaults(t *testing.T) {
-	// Set only the required field; all others should use defaults.
+	// Set only the required fields; all others should use defaults.
 	t.Setenv("HE_ACCOUNTS", `[{"id":"test","username":"user","password":"pass"}]`)
+	t.Setenv("JWT_SECRET", "test-secret-at-least-32-chars-long")
 
 	cfg, err := config.Load()
 	require.NoError(t, err)
@@ -41,6 +42,7 @@ func TestLoad_MissingRequired(t *testing.T) {
 
 func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("HE_ACCOUNTS", `[{"id":"prod","username":"vnovakov","password":"secret"}]`)
+	t.Setenv("JWT_SECRET", "custom-secret-at-least-32-chars-long")
 	t.Setenv("PORT", "9090")
 	t.Setenv("DB_PATH", "/data/custom.db")
 	t.Setenv("PLAYWRIGHT_HEADLESS", "false")
