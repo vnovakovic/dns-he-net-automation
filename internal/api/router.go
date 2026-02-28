@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -13,6 +15,7 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/api/middleware"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
+	"github.com/vnovakov/dns-he-net-automation/internal/metrics"
 	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
 )
 
@@ -20,16 +23,19 @@ import (
 //
 // Route structure:
 //   - GET /healthz — unauthenticated health check (OPS-01)
+//   - GET /metrics — Prometheus metrics endpoint, unauthenticated (OBS-01)
 //   - /api/v1/* — all require JWT bearer authentication (BearerAuth middleware)
 //   - POST/DELETE mutations additionally require admin role (RequireAdmin middleware)
 //
 // Middleware order:
 //   - GlobalRateLimit applied before BearerAuth (DDoS protection layer — research Pitfall 4)
+//   - PrometheusMiddleware applied globally to all routes after panic recovery
 //   - PerTokenRateLimit applied after BearerAuth (needs token identity from auth)
 func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launcher,
 	secret []byte, breakers *resilience.BreakerRegistry,
 	globalRPM, perTokenRPM int,
-	vaultHealthFn func() string) http.Handler {
+	vaultHealthFn func() string,
+	reg *metrics.Registry) http.Handler {
 	r := chi.NewRouter()
 
 	// Global rate limit — registered first, before auth, for DDoS protection (RES-03).
@@ -57,6 +63,11 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 		})
 	})
 
+	// Prometheus metrics middleware — records HTTP request counts and durations.
+	// Uses chi route patterns (not URL paths) to avoid cardinality explosion (OBS-01).
+	// Applied after panic recovery so panics are captured before metrics are recorded.
+	r.Use(PrometheusMiddleware(reg))
+
 	// NOTE: Do NOT use chiMiddleware.Logger here — it uses log.Printf, not slog (research anti-pattern).
 	// Structured request logging is handled in the BearerAuth middleware via slog.InfoContext.
 
@@ -71,6 +82,11 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 	// Health check — no authentication required (OPS-01).
 	// vaultHealthFn returns "ok", "degraded: <reason>", or "disabled" (VAULT-04).
 	r.Get("/healthz", handlers.HealthHandler(db, launcher, vaultHealthFn))
+
+	// Prometheus metrics endpoint — unauthenticated, at root level (OBS-01).
+	// MUST NOT be inside the /api/v1 group (which has BearerAuth middleware).
+	// Prometheus scrapers must not be behind auth (research Pitfall 4 / 05-01 key decision).
+	r.Get("/metrics", reg.Handler().ServeHTTP)
 
 	// All /api/v1/* routes require authentication.
 	r.Route("/api/v1", func(r chi.Router) {
@@ -113,4 +129,40 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 	})
 
 	return r
+}
+
+// PrometheusMiddleware returns a chi middleware that instruments every HTTP request
+// using the provided metrics registry.
+//
+// Labels use chi route patterns (e.g. "/api/v1/zones/{zoneID}") not URL paths
+// (e.g. "/api/v1/zones/12345") to avoid cardinality explosion when zone IDs and
+// record IDs are embedded in the path (OBS-01, research anti-pattern).
+//
+// If reg is nil, the middleware is a no-op passthrough — safe for unit tests.
+func PrometheusMiddleware(reg *metrics.Registry) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if reg == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Wrap the ResponseWriter to capture the status code after the handler runs.
+			ww := chiMiddleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			start := time.Now()
+
+			next.ServeHTTP(ww, r)
+
+			// Use the chi route pattern — NOT r.URL.Path — to prevent cardinality explosion.
+			// chi.RouteContext is populated by chi after routing, so RoutePattern() returns
+			// the pattern string (e.g. "/api/v1/zones/{zoneID}/records/{recordID}").
+			routePattern := chi.RouteContext(r.Context()).RoutePattern()
+			if routePattern == "" {
+				routePattern = "unknown"
+			}
+
+			reg.HTTPRequestsTotal.WithLabelValues(r.Method, routePattern, strconv.Itoa(ww.Status())).Inc()
+			reg.HTTPRequestDuration.WithLabelValues(r.Method, routePattern).Observe(time.Since(start).Seconds())
+		})
+	}
 }
