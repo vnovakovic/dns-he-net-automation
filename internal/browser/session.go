@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ type SessionManager struct {
 	opTimeout    time.Duration
 	reloginAge   time.Duration
 	minOpDelay   time.Duration
+	maxOpDelay   time.Duration
 }
 
 // NewSessionManager creates a SessionManager.
@@ -48,11 +50,12 @@ type SessionManager struct {
 //   - queueTimeout: max wait time to acquire per-account mutex; returns ErrQueueTimeout
 //   - opTimeout: context timeout for the operation function
 //   - reloginAge: max session age before proactive re-login
-//   - minOpDelay: minimum delay between operations on the same account
+//   - minOpDelay: minimum delay between operations on the same account (BROWSER-08)
+//   - maxOpDelay: maximum delay between operations on the same account (BROWSER-08 jitter upper bound)
 func NewSessionManager(
 	launcher *Launcher,
 	credProvider credential.Provider,
-	queueTimeout, opTimeout, reloginAge, minOpDelay time.Duration,
+	queueTimeout, opTimeout, reloginAge, minOpDelay, maxOpDelay time.Duration,
 ) *SessionManager {
 	return &SessionManager{
 		launcher:     launcher,
@@ -62,6 +65,7 @@ func NewSessionManager(
 		opTimeout:    opTimeout,
 		reloginAge:   reloginAge,
 		minOpDelay:   minOpDelay,
+		maxOpDelay:   maxOpDelay,
 	}
 }
 
@@ -155,14 +159,23 @@ func (sm *SessionManager) WithAccount(ctx context.Context, accountID string, op 
 		return fmt.Errorf("%w: %w", ErrSessionUnhealthy, err)
 	}
 
-	// Enforce minimum inter-operation delay to rate-limit dns.he.net interactions.
+	// Enforce inter-operation delay with jitter to rate-limit dns.he.net interactions.
+	// BROWSER-08: Jitter avoids a predictable scraping pattern that could trigger server-side
+	// rate limiting. math/rand (not crypto/rand) is sufficient — this is rate-limiting, not security.
 	if !session.lastOp.IsZero() {
 		elapsed := time.Since(session.lastOp)
-		if elapsed < sm.minOpDelay {
-			select {
-			case <-time.After(sm.minOpDelay - elapsed):
-			case <-opCtx.Done():
-				return opCtx.Err()
+		if elapsed < sm.maxOpDelay {
+			// Jitter: random delay between minOpDelay and maxOpDelay.
+			jitterRange := sm.maxOpDelay - sm.minOpDelay
+			jitter := time.Duration(rand.Int63n(int64(jitterRange + 1)))
+			target := sm.minOpDelay + jitter
+			remaining := target - elapsed
+			if remaining > 0 {
+				select {
+				case <-time.After(remaining):
+				case <-opCtx.Done():
+					return opCtx.Err()
+				}
 			}
 		}
 	}

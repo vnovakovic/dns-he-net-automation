@@ -105,9 +105,10 @@ func main() {
 	opTimeout := time.Duration(cfg.OperationTimeoutSec) * time.Second
 	reloginAge := time.Duration(cfg.SessionMaxAgeSec) * time.Second
 	minOpDelay := time.Duration(cfg.MinOperationDelaySec * float64(time.Second))
+	maxOpDelay := time.Duration(cfg.MaxOperationDelaySec * float64(time.Second))
 
 	// Create session manager with per-account mutex serialization (REL-02, REL-03).
-	sm := browser.NewSessionManager(launcher, credProvider, queueTimeout, opTimeout, reloginAge, minOpDelay)
+	sm := browser.NewSessionManager(launcher, credProvider, queueTimeout, opTimeout, reloginAge, minOpDelay, maxOpDelay)
 	defer sm.Close()
 
 	// Set up OS signal handling for graceful shutdown (SIGTERM for Docker/k8s, SIGINT for Ctrl+C).
