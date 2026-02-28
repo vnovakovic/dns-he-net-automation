@@ -121,7 +121,7 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 06-01-PLAN.md - BIND export (bindio package + ExportZone handler) and import (ParseZoneFile + ImportZone handler, additive-only sync)
+- [x] 06-01-PLAN.md - BIND export (bindio package + ExportZone handler) and import (ParseZoneFile + ImportZone handler, additive-only sync)
 - [ ] 06-02-PLAN.md - Admin UI foundation: auth middleware, static assets, templ layout/login, /admin sub-router skeleton
 - [ ] 06-03-PLAN.md - Admin UI accounts + tokens pages (templ components + htmx interactions)
 - [ ] 06-04-PLAN.md - Admin UI zones + sync + audit log pages, all stub handlers replaced, human verify checkpoint
@@ -138,4 +138,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. DNS Operations | 3/3 | Complete    | 2026-02-28 |
 | 4. Production Hardening | 4/4 | Complete   | 2026-02-28 |
 | 5. Observability + Sync Engine | 5/5 | Complete   | 2026-02-28 |
-| 6. BIND Import/Export + Admin UI | 0/2 | Not started | - |
+| 6. BIND Import/Export + Admin UI | 2/4 | In Progress|  |

@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** External systems can manage DNS records on dns.he.net via a REST API as if it were a first-class DNS provider, without any manual web interaction.
-**Current focus:** Phase 5: Observability and Sync Engine
+**Current focus:** Phase 6: BIND Import/Export + Admin UI
 
 ## Current Position
 
-Phase: 5 of 6 (Observability and Sync Engine)
-Plan: 5 of 5 in phase 5 (05-05 complete — SyncRecords handler + POST /sync route + shared API doc)
-Status: Phase 5 Complete
-Last activity: 2026-02-28 -- Plan 05-05 complete: SyncRecords handler wiring reconcile.DiffRecords + reconcile.Apply + audit.Write + SyncOpsTotal metrics; POST /api/v1/zones/{zoneID}/sync registered behind RequireAdmin; shared API doc updated with GET /metrics and POST /sync
+Phase: 6 of 6 (BIND Import/Export + Admin UI)
+Plan: 2 of 4 in phase 6 (06-02 complete — admin UI foundation: auth middleware + templ templates + RegisterAdminRoutes final signature + static assets)
+Status: In Progress
+Last activity: 2026-02-28 -- Plan 06-02 complete: AdminAuth middleware (Basic Auth + HMAC-SHA256 session cookie), go:embed static assets (admin.css + htmx 2.0.8), templ Layout + LoginPage components (_templ.go committed), RegisterAdminRoutes FINAL signature with 12 stub handlers, /admin sub-router mounted in main router
 
-Progress: [████████████████] 100% (Phase 5 complete)
+Progress: [████████░░░░░░░░] 50% (2/4 plans in phase 6)
 
 ## Performance Metrics
 
@@ -39,6 +39,7 @@ Progress: [████████████████] 100% (Phase 5 compl
 | 05-observability-sync-engine | 5/5 (complete) | 3 min (P05) | - |
 
 *Updated after each plan completion*
+| Phase 06 P02 | 7 | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,12 @@ Recent decisions affecting current work:
 - [Phase 05-02]: opType string parameter added to WithAccount — fine-grained per-operation labels (list_zones, create_record, etc.) for actionable dashboards
 - [Phase 05-02]: QueueDepth Dec on all 3 WithAccount exit paths (acquire/timeout/cancel) — prevents permanent gauge drift
 - [Phase 05-02]: ActiveSessions Inc in createBrowserSession after successful login; Dec in closeBrowserContext when ctx!=nil — exact session lifecycle tracking
+- [Phase 06]: Admin auth completely separate from REST Bearer JWT — ADMIN_SESSION_KEY is an independent HMAC signing key; rotating JWT_SECRET does not invalidate admin sessions
+- [Phase 06]: RegisterAdminRoutes FINAL signature defined in plan 02 — plans 03 and 04 replace stub handler bodies only; main.go updated exactly once
+- [Phase 06]: templ _templ.go files committed to repo — go build works without templ CLI at build time (RESEARCH.md Pitfall 4)
+- [Phase 06-01]: miekg/dns CNAME struct uses Target field (not Cname) — plan had wrong field name, auto-fixed in implementation
+- [Phase 06-01]: Single browser session for zone name + records in ExportZone/ImportZone — avoids double queue acquisition vs two separate WithAccount calls
+- [Phase 06-01]: Import is additive-only (plan.Delete = nil) — records absent from zone file are never deleted; full replacement deferred
 
 ### Pending Todos
 
@@ -130,5 +137,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 05-05-PLAN.md (SyncRecords handler: reconcile diff + apply + audit + metrics + POST /sync route + shared API doc)
+Stopped at: Completed 06-02-PLAN.md (admin UI foundation: auth middleware + templ templates + RegisterAdminRoutes final signature + static assets)
 Resume file: None
