@@ -82,8 +82,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Admin UI
 
 - [x] **UI-01**: An embedded web UI is served from the Go binary at `/admin`, built with `templ` templates and `htmx` for dynamic updates
-- [ ] **UI-02**: The admin UI allows listing, registering, and removing dns.he.net accounts
-- [ ] **UI-03**: The admin UI allows issuing, listing, and revoking bearer tokens per account
+- [x] **UI-02**: The admin UI allows listing, registering, and removing dns.he.net accounts
+- [x] **UI-03**: The admin UI allows issuing, listing, and revoking bearer tokens per account
 - [x] **UI-04**: The admin UI is protected by admin-level authentication (same bearer token system or a bootstrap admin token)
 - [x] **UI-05**: The admin UI is optional for operation — all functionality is available via REST API; the UI is a convenience layer
 
@@ -241,8 +241,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BIND-02 | Phase 6 | Complete — 06-01 |
 | BIND-03 | Phase 6 | Complete — 06-01 |
 | UI-01 | Phase 6 | Complete |
-| UI-02 | Phase 6 | Pending |
-| UI-03 | Phase 6 | Pending |
+| UI-02 | Phase 6 | Complete |
+| UI-03 | Phase 6 | Complete |
 | UI-04 | Phase 6 | Complete |
 | UI-05 | Phase 6 | Complete |
 | API-01 | Phase 2 | Complete |

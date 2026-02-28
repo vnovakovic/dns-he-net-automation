@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 6 of 6 (BIND Import/Export + Admin UI)
-Plan: 2 of 4 in phase 6 (06-02 complete — admin UI foundation: auth middleware + templ templates + RegisterAdminRoutes final signature + static assets)
+Plan: 3 of 4 in phase 6 (06-03 complete — accounts/tokens admin UI: accounts.templ + tokens.templ + 7 handler stubs replaced + token.RevokeByJTI)
 Status: In Progress
-Last activity: 2026-02-28 -- Plan 06-02 complete: AdminAuth middleware (Basic Auth + HMAC-SHA256 session cookie), go:embed static assets (admin.css + htmx 2.0.8), templ Layout + LoginPage components (_templ.go committed), RegisterAdminRoutes FINAL signature with 12 stub handlers, /admin sub-router mounted in main router
+Last activity: 2026-02-28 -- Plan 06-03 complete: accounts management page (htmx inline register/remove), tokens management page (lazy-load per account, issue with shown-once JWT, JTI-only revoke), all 7 account/token stub handlers replaced
 
-Progress: [████████░░░░░░░░] 50% (2/4 plans in phase 6)
+Progress: [████████████░░░░] 75% (3/4 plans in phase 6)
 
 ## Performance Metrics
 
@@ -40,6 +40,7 @@ Progress: [████████░░░░░░░░] 50% (2/4 plans in p
 
 *Updated after each plan completion*
 | Phase 06 P02 | 7 | 2 tasks | 13 files |
+| Phase 06 P03 | 3 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,9 @@ Recent decisions affecting current work:
 - [Phase 06-01]: miekg/dns CNAME struct uses Target field (not Cname) — plan had wrong field name, auto-fixed in implementation
 - [Phase 06-01]: Single browser session for zone name + records in ExportZone/ImportZone — avoids double queue acquisition vs two separate WithAccount calls
 - [Phase 06-01]: Import is additive-only (plan.Delete = nil) — records absent from zone file are never deleted; full replacement deferred
+- [Phase 06]: Admin handlers call DB directly — store package only provides Open(); inline DB queries mirror REST handler pattern
+- [Phase 06]: token.RevokeByJTI separates admin JTI-only revocation from user account-scoped RevokeToken — admin has full authority, avoids extra DB join
+- [Phase 06]: Lazy token loading via htmx GET /admin/tokens/{accountID} — avoids N+1 queries on page load for multi-account deployments
 
 ### Pending Todos
 
@@ -137,5 +141,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 06-02-PLAN.md (admin UI foundation: auth middleware + templ templates + RegisterAdminRoutes final signature + static assets)
+Stopped at: Completed 06-03-PLAN.md (accounts/tokens admin UI: accounts.templ + tokens.templ + 7 handler stubs replaced + token.RevokeByJTI)
 Resume file: None
