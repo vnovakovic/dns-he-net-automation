@@ -114,7 +114,7 @@ func main() {
 	defer stop()
 
 	// Wire chi router and start HTTP server (Phase 2).
-	handler := api.NewRouter(db, sm, []byte(cfg.JWTSecret))
+	handler := api.NewRouter(db, sm, launcher, []byte(cfg.JWTSecret))
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: handler,
