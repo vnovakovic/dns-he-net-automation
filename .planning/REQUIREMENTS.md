@@ -75,9 +75,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### BIND Zone File Import/Export
 
-- [ ] **BIND-01**: `GET /api/v1/zones/{zone_id}/export` returns the zone's records in standard BIND zone file format (RFC 1035 compatible), generated using `miekg/dns`
-- [ ] **BIND-02**: `POST /api/v1/zones/{zone_id}/import` accepts a BIND zone file body, parses it using `miekg/dns`, and creates/updates records to match the file contents
-- [ ] **BIND-03**: BIND import uses the sync engine internally (diff + apply), not blind create — existing matching records are left untouched
+- [x] **BIND-01**: `GET /api/v1/zones/{zone_id}/export` returns the zone's records in standard BIND zone file format (RFC 1035 compatible), generated using `miekg/dns`
+- [x] **BIND-02**: `POST /api/v1/zones/{zone_id}/import` accepts a BIND zone file body, parses it using `miekg/dns`, and creates/updates records to match the file contents
+- [x] **BIND-03**: BIND import uses the sync engine internally (diff + apply), not blind create — existing matching records are left untouched
 
 ### Admin UI
 
@@ -237,9 +237,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNC-04 | Phase 5 | Complete (05-04) |
 | SYNC-05 | Phase 5 | Complete (05-04) |
 | SYNC-06 | Phase 5 | Complete |
-| BIND-01 | Phase 6 | Pending |
-| BIND-02 | Phase 6 | Pending |
-| BIND-03 | Phase 6 | Pending |
+| BIND-01 | Phase 6 | Complete — 06-01 |
+| BIND-02 | Phase 6 | Complete — 06-01 |
+| BIND-03 | Phase 6 | Complete — 06-01 |
 | UI-01 | Phase 6 | Complete |
 | UI-02 | Phase 6 | Pending |
 | UI-03 | Phase 6 | Pending |
