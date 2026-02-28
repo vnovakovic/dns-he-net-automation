@@ -54,14 +54,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### DNS Record CRUD
 
-- [ ] **REC-01**: `GET /api/v1/zones/{zone_id}/records` returns all DNS records for a zone, scraped live from dns.he.net (no local cache)
-- [ ] **REC-02**: Each record in the response includes the dns.he.net internal record ID, record type, name, value, TTL, and type-specific fields (priority for MX/SRV, weight/port for SRV)
-- [ ] **REC-03**: `POST /api/v1/zones/{zone_id}/records` creates a new DNS record. Supported types in v1: A, AAAA, CNAME, MX, TXT, SRV, CAA, NS
-- [ ] **REC-04**: `PUT /api/v1/zones/{zone_id}/records/{record_id}` updates an existing DNS record (modifies value, TTL, or type-specific fields)
-- [ ] **REC-05**: `DELETE /api/v1/zones/{zone_id}/records/{record_id}` deletes a DNS record
-- [ ] **REC-06**: `GET /api/v1/zones/{zone_id}/records/{record_id}` returns a single record by its ID
-- [ ] **REC-07**: Record creation is idempotent: creating a record that already exists (matched by type + name + value) returns 200 with the existing record, not 409
-- [ ] **REC-08**: Record deletion is idempotent: deleting an already-deleted record returns 204, not 404
+- [x] **REC-01**: `GET /api/v1/zones/{zone_id}/records` returns all DNS records for a zone, scraped live from dns.he.net (no local cache)
+- [x] **REC-02**: Each record in the response includes the dns.he.net internal record ID, record type, name, value, TTL, and type-specific fields (priority for MX/SRV, weight/port for SRV)
+- [x] **REC-03**: `POST /api/v1/zones/{zone_id}/records` creates a new DNS record. Supported types in v1: A, AAAA, CNAME, MX, TXT, SRV, CAA, NS
+- [x] **REC-04**: `PUT /api/v1/zones/{zone_id}/records/{record_id}` updates an existing DNS record (modifies value, TTL, or type-specific fields)
+- [x] **REC-05**: `DELETE /api/v1/zones/{zone_id}/records/{record_id}` deletes a DNS record
+- [x] **REC-06**: `GET /api/v1/zones/{zone_id}/records/{record_id}` returns a single record by its ID
+- [x] **REC-07**: Record creation is idempotent: creating a record that already exists (matched by type + name + value) returns 200 with the existing record, not 409
+- [x] **REC-08**: Record deletion is idempotent: deleting an already-deleted record returns 204, not 404
 - [ ] **REC-09**: All record types enforce correct field validation (e.g., MX requires priority, SRV requires priority + weight + port, TXT value is properly escaped)
 
 ### Sync and Reconcile
@@ -142,7 +142,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Compatibility
 
 - [x] **COMPAT-01**: All record and zone responses include stable IDs, full field state, and consistent JSON schemas to support a future Terraform provider without API changes
-- [ ] **COMPAT-02**: Record create is idempotent (returns existing on conflict) and delete is idempotent (204 on missing) to support Terraform and Ansible retry semantics
+- [x] **COMPAT-02**: Record create is idempotent (returns existing on conflict) and delete is idempotent (204 on missing) to support Terraform and Ansible retry semantics
 - [ ] **COMPAT-03**: The Go binary compiles on Linux amd64 and arm64; the Docker image targets Linux amd64
 
 ## v2 Requirements
@@ -222,14 +222,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ZONE-02 | Phase 3 | Complete |
 | ZONE-03 | Phase 3 | Complete |
 | ZONE-04 | Phase 3 | Complete |
-| REC-01 | Phase 3 | Pending |
-| REC-02 | Phase 3 | Pending |
-| REC-03 | Phase 3 | Pending |
-| REC-04 | Phase 3 | Pending |
-| REC-05 | Phase 3 | Pending |
-| REC-06 | Phase 3 | Pending |
-| REC-07 | Phase 3 | Pending |
-| REC-08 | Phase 3 | Pending |
+| REC-01 | Phase 3 | Complete (03-02) |
+| REC-02 | Phase 3 | Complete (03-02) |
+| REC-03 | Phase 3 | Complete (03-02) |
+| REC-04 | Phase 3 | Complete (03-02) |
+| REC-05 | Phase 3 | Complete (03-02) |
+| REC-06 | Phase 3 | Complete (03-02) |
+| REC-07 | Phase 3 | Complete (03-02) |
+| REC-08 | Phase 3 | Complete (03-02) |
 | REC-09 | Phase 3 | Pending |
 | SYNC-01 | Phase 5 | Pending |
 | SYNC-02 | Phase 5 | Pending |
@@ -275,7 +275,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REL-02 | Phase 1 | Complete (01-02) |
 | REL-03 | Phase 1 | Complete (01-02) |
 | COMPAT-01 | Phase 3 | Complete |
-| COMPAT-02 | Phase 3 | Pending |
+| COMPAT-02 | Phase 3 | Complete (03-02) |
 | COMPAT-03 | Phase 3 | Pending |
 
 **Coverage:**
@@ -293,4 +293,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-27*
-*Last updated: 2026-02-27 after plan 01-01 completion (OPS-03, OPS-06, REL-01, SEC-03 completed)*
+*Last updated: 2026-02-28 after plan 03-02 completion (REC-01..08, COMPAT-02 completed)*

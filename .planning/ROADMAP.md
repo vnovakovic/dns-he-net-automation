@@ -68,8 +68,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md -- Zone page objects (AddZone, DeleteZone, GetZoneName) and zone API handlers (ListZones, CreateZone, DeleteZone)
-- [ ] 03-02-PLAN.md -- Record page objects (ParseRecordRow, ListRecords, FindRecord) and record API handlers (List, Get, Create, Update, Delete) with idempotency
+- [x] 03-01-PLAN.md -- Zone page objects (AddZone, DeleteZone, GetZoneName) and zone API handlers (ListZones, CreateZone, DeleteZone)
+- [x] 03-02-PLAN.md -- Record page objects (ParseRecordRow, ListRecords, FindRecord) and record API handlers (List, Get, Create, Update, Delete) with idempotency
 - [ ] 03-03-PLAN.md -- Field validation (internal/api/validate), ?type/?name query filtering, WriteJSON helper, Makefile build-linux cross-compilation
 
 ### Phase 4: Production Hardening
@@ -130,7 +130,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Foundation + Browser Core | 3/3 | Complete | 2026-02-27 |
 | 2. API Layer + Authentication | 3/TBD | Complete    | 2026-02-28 |
-| 3. DNS Operations | 1/3 | In Progress|  |
+| 3. DNS Operations | 2/3 | In Progress|  |
 | 4. Production Hardening | 0/3 | Not started | - |
 | 5. Observability + Sync Engine | 0/3 | Not started | - |
 | 6. BIND Import/Export + Admin UI | 0/2 | Not started | - |

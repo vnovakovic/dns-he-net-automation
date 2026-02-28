@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 3 of 6 (DNS Operations)
-Plan: 1 of 3 in phase 3 (03-01 complete)
+Plan: 2 of 3 in phase 3 (03-02 complete)
 Status: In Progress
-Last activity: 2026-02-28 -- Plan 03-01 complete, zone page object methods (AddZone/DeleteZone/GetZoneName) + zone API handlers (GET/POST/DELETE /api/v1/zones)
+Last activity: 2026-02-28 -- Plan 03-02 complete, record page object methods (ParseRecordRow/ListRecords/FindRecord) + record API handlers (GET/POST/GET/PUT/DELETE /api/v1/zones/{zoneID}/records)
 
-Progress: [███████░░░] 44%
+Progress: [████████░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: 6 min
-- Total execution time: 0.65 hours
+- Total execution time: 0.90 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [███████░░░] 44%
 |-------|-------|-------|----------|
 | 01-foundation-browser-core | 3/3 | 25 min | 8 min |
 | 02-api-auth | 3/5 | 13 min | 4 min |
-| 03-dns-operations | 1/3 | 12 min | 12 min |
+| 03-dns-operations | 2/3 | 27 min | 14 min |
 
 **Recent Trend:**
-- Last 5 plans: 9 min, 4 min, 6 min, 3 min, 12 min
+- Last 5 plans: 4 min, 6 min, 3 min, 12 min, 15 min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -70,6 +70,10 @@ Recent decisions affecting current work:
 - [03-01]: Dialog.Accept("DELETE") variadic form serves as both Fill+Accept in one call -- no separate Fill method exists in this API version
 - [03-01]: GetZoneID error return treated as zone-not-found for idempotency in CreateZone pre-check and DeleteZone verification
 - [03-01]: ZoneResponse.FetchedAt set to handler start time (before WithAccount) for consistent timestamps across list items
+- [03-02]: ParseRecordRow uses InnerText on individual td Locators (cells.Nth(idx).InnerText()) -- td cells hold text content not attribute values
+- [03-02]: ListRecords skips locked rows with slog.Warn rather than returning error -- SOA and system rows cannot be managed and should not block list operations
+- [03-02]: validateRecordFields extracted as shared helper to avoid duplicating MX/SRV validation between CreateRecord and UpdateRecord
+- [03-02]: UpdateRecord calls ParseRecordRow after FillAndSubmit to return authoritative server-side record state rather than echoing request body
 
 ### Pending Todos
 
@@ -83,5 +87,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 03-01-PLAN.md (zone page object AddZone/DeleteZone/GetZoneName + GET/POST/DELETE /api/v1/zones handlers)
+Stopped at: Completed 03-02-PLAN.md (record page object ParseRecordRow/ListRecords/FindRecord + five record API handlers GET/POST/GET/PUT/DELETE /api/v1/zones/{zoneID}/records)
 Resume file: None
