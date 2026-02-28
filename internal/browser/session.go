@@ -33,15 +33,16 @@ type AccountSession struct {
 //   - Requests that cannot acquire the mutex within queueTimeout receive ErrQueueTimeout (REL-03).
 //   - Each operation is wrapped in a context.WithTimeout(opTimeout).
 type SessionManager struct {
-	launcher     *Launcher
-	credProvider credential.Provider
-	sessions     map[string]*AccountSession
-	sessionsMu   sync.RWMutex // protects the sessions map (NOT per-account mutex)
-	queueTimeout time.Duration
-	opTimeout    time.Duration
-	reloginAge   time.Duration
-	minOpDelay   time.Duration
-	maxOpDelay   time.Duration
+	launcher      *Launcher
+	credProvider  credential.Provider
+	sessions      map[string]*AccountSession
+	sessionsMu    sync.RWMutex // protects the sessions map (NOT per-account mutex)
+	queueTimeout  time.Duration
+	opTimeout     time.Duration
+	reloginAge    time.Duration
+	minOpDelay    time.Duration
+	maxOpDelay    time.Duration
+	screenshotDir string // OBS-03: directory for debug screenshots; empty = disabled
 }
 
 // NewSessionManager creates a SessionManager.
@@ -52,20 +53,23 @@ type SessionManager struct {
 //   - reloginAge: max session age before proactive re-login
 //   - minOpDelay: minimum delay between operations on the same account (BROWSER-08)
 //   - maxOpDelay: maximum delay between operations on the same account (BROWSER-08 jitter upper bound)
+//   - screenshotDir: directory for debug screenshots on failure; empty string disables screenshots (OBS-03)
 func NewSessionManager(
 	launcher *Launcher,
 	credProvider credential.Provider,
 	queueTimeout, opTimeout, reloginAge, minOpDelay, maxOpDelay time.Duration,
+	screenshotDir string,
 ) *SessionManager {
 	return &SessionManager{
-		launcher:     launcher,
-		credProvider: credProvider,
-		sessions:     make(map[string]*AccountSession),
-		queueTimeout: queueTimeout,
-		opTimeout:    opTimeout,
-		reloginAge:   reloginAge,
-		minOpDelay:   minOpDelay,
-		maxOpDelay:   maxOpDelay,
+		launcher:      launcher,
+		credProvider:  credProvider,
+		sessions:      make(map[string]*AccountSession),
+		queueTimeout:  queueTimeout,
+		opTimeout:     opTimeout,
+		reloginAge:    reloginAge,
+		minOpDelay:    minOpDelay,
+		maxOpDelay:    maxOpDelay,
+		screenshotDir: screenshotDir,
 	}
 }
 
@@ -212,6 +216,10 @@ func (sm *SessionManager) createBrowserSession(ctx context.Context, session *Acc
 
 	// SEC-03: log accountID only, never password.
 	if err := pages.NewLoginPage(page).Login(cred.Username, cred.Password); err != nil {
+		// OBS-03: capture screenshot on login failure for post-mortem.
+		if page != nil {
+			SaveDebugScreenshot(page, sm.screenshotDir, session.accountID, "login-failure")
+		}
 		browserCtx.Close() //nolint:errcheck
 		return fmt.Errorf("login for account %q: %w", session.accountID, err)
 	}
@@ -276,9 +284,15 @@ func (sm *SessionManager) ensureHealthy(ctx context.Context, session *AccountSes
 	loggedIn, err := pages.NewLoginPage(session.page).IsLoggedIn()
 	if err != nil || !loggedIn {
 		slog.Info("session unhealthy, recovering", "account", session.accountID)
+		// OBS-03: save debug screenshot before tearing down the unhealthy session.
+		if session.page != nil {
+			SaveDebugScreenshot(session.page, sm.screenshotDir, session.accountID, "health-check-failure")
+		}
 		sm.closeBrowserContext(session)
 		session.healthy = false
 		if recoveryErr := sm.createBrowserSession(ctx, session); recoveryErr != nil {
+			// BROWSER-09: recovery after crash failed — log with details.
+			slog.Error("session recovery failed after crash", "account", session.accountID, "err", recoveryErr)
 			return fmt.Errorf("recovery failed: %w", ErrSessionUnhealthy)
 		}
 		return nil

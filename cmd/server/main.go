@@ -108,7 +108,7 @@ func main() {
 	maxOpDelay := time.Duration(cfg.MaxOperationDelaySec * float64(time.Second))
 
 	// Create session manager with per-account mutex serialization (REL-02, REL-03).
-	sm := browser.NewSessionManager(launcher, credProvider, queueTimeout, opTimeout, reloginAge, minOpDelay, maxOpDelay)
+	sm := browser.NewSessionManager(launcher, credProvider, queueTimeout, opTimeout, reloginAge, minOpDelay, maxOpDelay, cfg.ScreenshotDir)
 	defer sm.Close()
 
 	// Set up OS signal handling for graceful shutdown (SIGTERM for Docker/k8s, SIGINT for Ctrl+C).

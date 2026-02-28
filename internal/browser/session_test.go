@@ -29,6 +29,7 @@ func newTestSessionManager(queueTimeout, opTimeout time.Duration) *SessionManage
 		30*time.Minute, // reloginAge
 		0,              // minOpDelay: no delay for tests
 		0,              // maxOpDelay: no delay for tests
+		"",             // screenshotDir: disabled in tests (OBS-03)
 	)
 }
 
