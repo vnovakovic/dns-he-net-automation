@@ -1,15 +1,22 @@
 package admin
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	playwright "github.com/playwright-community/playwright-go"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/admin/templates"
+	"github.com/vnovakov/dns-he-net-automation/internal/audit"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
+	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
 	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakov/dns-he-net-automation/internal/reconcile"
 	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
 	"github.com/vnovakov/dns-he-net-automation/internal/token"
 )
@@ -384,26 +391,231 @@ func handleTokenRevoke(db *sql.DB) http.HandlerFunc {
 }
 
 
+// handleZonesPage renders the read-only zones view (GET /admin/zones).
+//
+// WHY read-only and no browser session (not scraping live zone data):
+//   Fetching zones requires browser automation per account — a Playwright session
+//   must log in and scrape the zone list. Triggering this on every page load is
+//   too expensive for a simple informational page. Instead, we show accounts and
+//   direct operators to use GET /api/v1/zones for live zone data.
+//   (CONTEXT.md deferred: zone CRUD via UI is out of scope for this phase)
+//
+// WHY store.ListAccounts is NOT used:
+//   The store package only provides Open() for DB initialization. Account CRUD
+//   uses direct DB queries — same pattern as REST handlers (see listAccountsFromDB).
 func handleZonesPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "zones page: implemented in plan 04", http.StatusNotImplemented)
+		accounts, err := listAccountsFromDB(r, db)
+		if err != nil {
+			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
+			return
+		}
+		// Zones page is read-only; no browser sessions are triggered here.
+		// Pass empty zonesByAccount — the template shows a note directing operators
+		// to use the REST API for zone details.
+		data := templates.PageData{Title: "Zones", ActivePage: "zones"}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.ZonesPage(map[string][]model.Zone{}, accounts, data).Render(r.Context(), w)
 	}
 }
 
+// handleSyncPage renders the sync trigger form (GET /admin/sync).
+//
+// WHY load accounts for the select (not just show a blank form):
+//   The account selector requires a list of registered accounts. This is a
+//   cheap DB query and improves usability significantly vs. requiring operators
+//   to type account IDs manually.
 func handleSyncPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "sync page: implemented in plan 04", http.StatusNotImplemented)
+		accounts, err := listAccountsFromDB(r, db)
+		if err != nil {
+			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
+			return
+		}
+		data := templates.PageData{Title: "Sync", ActivePage: "sync"}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.SyncPage(accounts, data).Render(r.Context(), w)
 	}
 }
 
+// handleSyncTrigger processes the sync form submission (POST /admin/sync/trigger).
+//
+// WHY in-process reconcile (not HTTP POST to /api/v1/zones/{zoneID}/sync):
+//   Making an HTTP request to the REST API from within the admin UI handler would
+//   require managing a Bearer token (issue → use → store securely) and adds
+//   unnecessary round-trip latency. Calling reconcile.DiffRecords and
+//   reconcile.Apply directly reuses the same logic without network overhead.
+//   (RESEARCH.md anti-pattern: admin UI is an in-process layer, not an API client)
+//
+// WHY the form posts account_id and zone_id in the body (not the URL):
+//   The hx-post target is /admin/sync/trigger (fixed path). The zone_id is a
+//   form field because a select/input in the form body is more flexible than
+//   embedding it in the URL — users can change zone IDs without navigating away.
+//
+// WHY operation closures (deleteFn, updateFn, createFn) mirror sync.go exactly:
+//   These closures call the same browser page objects (ZoneListPage, RecordFormPage)
+//   with the same breakers.Execute + WithRetry + WithAccount wrapping. Keeping
+//   them identical ensures identical retry and circuit-breaker semantics for both
+//   the REST API and admin UI sync paths.
 func handleSyncTrigger(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "sync trigger: implemented in plan 04", http.StatusNotImplemented)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		accountID := r.FormValue("account_id")
+		zoneID := r.FormValue("zone_id")
+		dryRun := r.FormValue("dry_run") == "true"
+		desiredJSON := r.FormValue("desired_records")
+		if desiredJSON == "" {
+			desiredJSON = "[]"
+		}
+
+		var desiredRecords []model.Record
+		if err := json.Unmarshal([]byte(desiredJSON), &desiredRecords); err != nil {
+			http.Error(w, "Invalid desired records JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Scrape current DNS state from dns.he.net via browser automation.
+		var currentRecords []model.Record
+		err := breakers.Execute(r.Context(), accountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, accountID, "list_records", func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
+					recs, err := zl.ListRecords(zoneID)
+					if err != nil {
+						return err
+					}
+					currentRecords = recs
+					return nil
+				})
+			})
+		})
+		if err != nil {
+			http.Error(w, "Failed to fetch current records: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		plan := reconcile.DiffRecords(currentRecords, desiredRecords)
+
+		var results []reconcile.SyncResult
+		hadErrors := false
+
+		if !dryRun {
+			// deleteFn navigates to the zone, looks up the zone name and record type,
+			// then calls the deleteRecord browser action.
+			// Mirrors the deleteFn in internal/api/handlers/sync.go exactly.
+			deleteFn := func(ctx context.Context, zID string, rec model.Record) error {
+				return breakers.Execute(ctx, accountID, func() error {
+					return resilience.WithRetry(ctx, func(ctx context.Context) error {
+						return sm.WithAccount(ctx, accountID, "delete_record", func(page playwright.Page) error {
+							zl := pages.NewZoneListPage(page)
+							if err := zl.NavigateToZone(zID); err != nil {
+								return err
+							}
+							zoneName, err := zl.GetZoneName(zID)
+							if err != nil {
+								return err
+							}
+							parsed, err := zl.ParseRecordRow(rec.ID)
+							if err != nil {
+								return err
+							}
+							rf := pages.NewRecordFormPage(page)
+							return rf.DeleteRecord(rec.ID, zoneName, string(parsed.Type))
+						})
+					})
+				})
+			}
+
+			// updateFn opens the edit form for the existing record ID and submits new field values.
+			// Mirrors the updateFn in internal/api/handlers/sync.go exactly.
+			updateFn := func(ctx context.Context, zID string, rec model.Record) error {
+				return breakers.Execute(ctx, accountID, func() error {
+					return resilience.WithRetry(ctx, func(ctx context.Context) error {
+						return sm.WithAccount(ctx, accountID, "update_record", func(page playwright.Page) error {
+							zl := pages.NewZoneListPage(page)
+							if err := zl.NavigateToZone(zID); err != nil {
+								return err
+							}
+							rf := pages.NewRecordFormPage(page)
+							if err := rf.EditExistingRecord(rec.ID); err != nil {
+								return err
+							}
+							return rf.FillAndSubmit(rec)
+						})
+					})
+				})
+			}
+
+			// createFn opens the new-record form for the given type and submits.
+			// Mirrors the createFn in internal/api/handlers/sync.go exactly.
+			createFn := func(ctx context.Context, zID string, rec model.Record) error {
+				return breakers.Execute(ctx, accountID, func() error {
+					return resilience.WithRetry(ctx, func(ctx context.Context) error {
+						return sm.WithAccount(ctx, accountID, "create_record", func(page playwright.Page) error {
+							zl := pages.NewZoneListPage(page)
+							if err := zl.NavigateToZone(zID); err != nil {
+								return err
+							}
+							rf := pages.NewRecordFormPage(page)
+							if err := rf.OpenNewRecordForm(string(rec.Type)); err != nil {
+								return err
+							}
+							return rf.FillAndSubmit(rec)
+						})
+					})
+				})
+			}
+
+			results = reconcile.Apply(r.Context(), zoneID, plan, deleteFn, updateFn, createFn)
+			for _, res := range results {
+				if res.Status == "error" {
+					hadErrors = true
+				}
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.SyncResultPartial(zoneID, dryRun, plan, results, hadErrors).Render(r.Context(), w)
 	}
 }
 
+// handleAuditPage renders the paginated audit log (GET /admin/audit).
+//
+// WHY pageSize=50 (Claude's Discretion):
+//   50 entries balances visibility (enough history at a glance) with page weight
+//   (each row is a short DB read). CONTEXT.md notes this as a discretionary value.
+//
+// WHY totalPages never 0:
+//   If the audit log is empty (totalCount=0), the ceiling division returns 0.
+//   We clamp to 1 so the template always shows "Page 1 of 1" rather than
+//   "Page 1 of 0" which would be confusing to operators.
 func handleAuditPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "audit page: implemented in plan 04", http.StatusNotImplemented)
+		const pageSize = 50
+		pageNum := 1
+		if p := r.URL.Query().Get("page"); p != "" {
+			if n, err := strconv.Atoi(p); err == nil && n > 0 {
+				pageNum = n
+			}
+		}
+		offset := (pageNum - 1) * pageSize
+
+		entries, err := audit.List(db, pageSize, offset)
+		if err != nil {
+			http.Error(w, "Failed to load audit log", http.StatusInternalServerError)
+			return
+		}
+		totalCount, _ := audit.Count(db)
+		totalPages := (totalCount + pageSize - 1) / pageSize
+		if totalPages == 0 {
+			totalPages = 1
+		}
+
+		data := templates.PageData{Title: "Audit Log", ActivePage: "audit"}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.AuditPage(entries, pageNum, totalPages, data).Render(r.Context(), w)
 	}
 }
