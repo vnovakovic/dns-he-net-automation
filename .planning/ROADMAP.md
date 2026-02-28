@@ -100,12 +100,14 @@ Plans:
   3. `POST /api/v1/zones/{zone_id}/sync` accepts a desired-state record set, computes a diff (adds/updates/deletes), and applies changes in safe order (deletes first, then updates, then adds)
   4. Sync is idempotent (running twice with the same desired state produces no changes on the second run) and supports `dry_run=true` to preview the diff without applying
   5. Sync handles partial failure: if one operation fails, remaining operations still execute, and the response reports per-operation results
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 05-01: Prometheus metrics instrumentation across all layers
-- [ ] 05-02: Audit log (SQLite table, write on every mutation, queryable)
-- [ ] 05-03: Sync engine (diff algorithm, ordered apply, dry-run, partial success)
+- [ ] 05-01-PLAN.md -- Prometheus metrics registry package (custom registry, all metric vars, Handler())
+- [ ] 05-02-PLAN.md -- HTTP + browser instrumentation (PrometheusMiddleware, SessionManager metrics, /metrics route, main.go wiring)
+- [ ] 05-03-PLAN.md -- Audit log (003_audit_log.sql migration, audit package, Write() calls in all mutating handlers)
+- [ ] 05-04-PLAN.md -- Sync diff algorithm TDD (reconcile package: DiffRecords, Apply, SyncPlan, SyncResult)
+- [ ] 05-05-PLAN.md -- Sync HTTP handler and router registration (POST /sync, dry-run, partial success, audit, metrics)
 
 ### Phase 6: BIND Import/Export + Admin UI
 **Goal**: Operators can import/export zones in standard BIND format for migration and backup, and manage accounts and tokens through an embedded web UI without curl
@@ -133,5 +135,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. API Layer + Authentication | 3/TBD | Complete    | 2026-02-28 |
 | 3. DNS Operations | 3/3 | Complete    | 2026-02-28 |
 | 4. Production Hardening | 4/4 | Complete   | 2026-02-28 |
-| 5. Observability + Sync Engine | 0/3 | Not started | - |
+| 5. Observability + Sync Engine | 0/5 | Not started | - |
 | 6. BIND Import/Export + Admin UI | 0/2 | Not started | - |
