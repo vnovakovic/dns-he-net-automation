@@ -2,6 +2,9 @@ package pages
 
 import (
 	"fmt"
+	"log/slog"
+	"strconv"
+	"strings"
 
 	playwright "github.com/playwright-community/playwright-go"
 	"github.com/vnovakov/dns-he-net-automation/internal/model"
@@ -270,4 +273,188 @@ func (zp *ZoneListPage) GetRecordRows() ([]RecordRow, error) {
 	}
 
 	return rows, nil
+}
+
+// ParseRecordRow extracts a model.Record from a single tr.dns_tr row by its HTML element ID.
+//
+// Column indices for tr.dns_tr td elements (10 tds per row — verified against live dns.he.net):
+//
+//	td[0]: hidden — zone ID (ignored; supplied separately)
+//	td[1]: hidden — record ID (dns.he.net internal ID)
+//	td[2]: class="dns_view" — record name
+//	td[3]: record type string (e.g., "A", "MX", "SRV")
+//	td[4]: TTL as string (e.g., "300", "3600")
+//	td[5]: priority — "-" for non-MX/SRV, numeric string for MX/SRV
+//	td[6]: content/data — for SRV holds "Weight Port Target" space-separated
+//	td[7]: hidden — DDNS flag ("0" or "1")
+//	td[8]: DDNS key button (empty for static records)
+//	td[9]: class="dns_delete" — delete img button (ignored)
+func (zp *ZoneListPage) ParseRecordRow(rowID string) (*model.Record, error) {
+	cells := zp.page.Locator(fmt.Sprintf("tr#%s td", rowID))
+
+	count, err := cells.Count()
+	if err != nil {
+		return nil, fmt.Errorf("parse record row %q: count tds: %w", rowID, err)
+	}
+	if count != 10 {
+		return nil, fmt.Errorf("parse record row %q: expected 10 tds, got %d", rowID, count)
+	}
+
+	getText := func(idx int) (string, error) {
+		text, err := cells.Nth(idx).InnerText()
+		if err != nil {
+			return "", fmt.Errorf("td[%d]: %w", idx, err)
+		}
+		return strings.TrimSpace(text), nil
+	}
+
+	recordID, err := getText(1)
+	if err != nil {
+		return nil, fmt.Errorf("parse record row %q: read record ID: %w", rowID, err)
+	}
+
+	name, err := getText(2)
+	if err != nil {
+		return nil, fmt.Errorf("parse record row %q: read name: %w", rowID, err)
+	}
+
+	recType, err := getText(3)
+	if err != nil {
+		return nil, fmt.Errorf("parse record row %q: read type: %w", rowID, err)
+	}
+
+	ttlStr, err := getText(4)
+	if err != nil {
+		return nil, fmt.Errorf("parse record row %q: read TTL: %w", rowID, err)
+	}
+
+	prioStr, err := getText(5)
+	if err != nil {
+		return nil, fmt.Errorf("parse record row %q: read priority: %w", rowID, err)
+	}
+
+	content, err := getText(6)
+	if err != nil {
+		return nil, fmt.Errorf("parse record row %q: read content: %w", rowID, err)
+	}
+
+	ddnsStr, err := getText(7)
+	if err != nil {
+		return nil, fmt.Errorf("parse record row %q: read DDNS flag: %w", rowID, err)
+	}
+
+	ttl, err := strconv.Atoi(ttlStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse record row %q: parse TTL %q: %w", rowID, ttlStr, err)
+	}
+
+	var priority int
+	if strings.TrimSpace(prioStr) == "-" {
+		priority = 0
+	} else {
+		priority, err = strconv.Atoi(prioStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse record row %q: parse priority %q: %w", rowID, prioStr, err)
+		}
+	}
+
+	dynamic := strings.TrimSpace(ddnsStr) == "1"
+
+	rec := &model.Record{
+		ID:       recordID,
+		Type:     model.RecordType(recType),
+		Name:     name,
+		TTL:      ttl,
+		Priority: priority,
+		Dynamic:  dynamic,
+	}
+
+	// SRV records: content field holds "Weight Port Target" space-separated.
+	if rec.Type == model.RecordTypeSRV {
+		parts := strings.Fields(content)
+		if len(parts) == 3 {
+			rec.Weight, _ = strconv.Atoi(parts[0])
+			rec.Port, _ = strconv.Atoi(parts[1])
+			rec.Target = parts[2]
+			rec.Content = "" // SRV has no Content field
+		} else {
+			// Fallback: store raw content for debugging
+			rec.Content = content
+		}
+	} else {
+		rec.Content = content
+	}
+
+	return rec, nil
+}
+
+// ListRecords navigates to the zone's record page and returns all manageable
+// (non-locked) DNS records. Locked rows (e.g., SOA) are silently skipped.
+func (zp *ZoneListPage) ListRecords(zoneID string) ([]model.Record, error) {
+	if err := zp.NavigateToZone(zoneID); err != nil {
+		return nil, fmt.Errorf("list records: %w", err)
+	}
+
+	rows, err := zp.GetRecordRows()
+	if err != nil {
+		return nil, fmt.Errorf("list records: get record rows: %w", err)
+	}
+
+	var results []model.Record
+	for _, row := range rows {
+		if row.IsLocked {
+			continue
+		}
+		rec, err := zp.ParseRecordRow(row.ID)
+		if err != nil {
+			slog.Warn("skip record row parse error", "row_id", row.ID, "err", err)
+			continue
+		}
+		rec.ZoneID = zoneID
+		results = append(results, *rec)
+	}
+
+	return results, nil
+}
+
+// FindRecord returns the record ID of the first existing record that matches
+// the given record by type+name and type-specific content fields.
+// Returns "" (with nil error) when no match is found.
+// Used for idempotency checking before creating a new record.
+func (zp *ZoneListPage) FindRecord(zoneID string, rec model.Record) (string, error) {
+	all, err := zp.ListRecords(zoneID)
+	if err != nil {
+		return "", err
+	}
+
+	for _, existing := range all {
+		if recordsMatch(existing, rec) {
+			return existing.ID, nil
+		}
+	}
+
+	return "", nil
+}
+
+// recordsMatch returns true when two records are considered identical for idempotency purposes.
+// Matching is type-specific:
+//   - MX:  Type + Name (case-insensitive) + Content (case-insensitive) + Priority
+//   - SRV: Type + Name (case-insensitive) + Priority + Weight + Port + Target (case-insensitive)
+//   - All others: Type + Name (case-insensitive) + Content (case-insensitive)
+func recordsMatch(a, b model.Record) bool {
+	if a.Type != b.Type {
+		return false
+	}
+	if !strings.EqualFold(a.Name, b.Name) {
+		return false
+	}
+	switch a.Type {
+	case model.RecordTypeMX:
+		return strings.EqualFold(a.Content, b.Content) && a.Priority == b.Priority
+	case model.RecordTypeSRV:
+		return a.Priority == b.Priority && a.Weight == b.Weight &&
+			a.Port == b.Port && strings.EqualFold(a.Target, b.Target)
+	default:
+		return strings.EqualFold(a.Content, b.Content)
+	}
 }
