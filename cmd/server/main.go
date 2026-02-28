@@ -51,7 +51,8 @@ func main() {
 		Level: level,
 	})))
 
-	// Log startup -- NEVER log HE_ACCOUNTS or any credentials (SEC-03).
+	// SECURITY: Never log cfg.JWTSecret, cfg.HEAccountsJSON, or any credential value.
+	// OPS-02 requires structured fields; SEC-01/SEC-02 prohibit credential exposure.
 	slog.Info("service starting",
 		"port", cfg.Port,
 		"db_path", cfg.DBPath,
@@ -138,12 +139,20 @@ func main() {
 	stop() // release signal resources
 
 	slog.Info("shutting down http server")
+
+	// Use context.Background() (not the signal context) for the shutdown timeout.
+	// The signal context is already cancelled at this point — using it would give an
+	// already-cancelled context to Shutdown, causing immediate abort rather than a 30s drain.
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("http server shutdown error", "error", err)
 	}
-	// After Shutdown() returns, deferred db.Close(), sm.Close(), launcher.Close() run.
+	slog.Info("http server stopped")
+
+	// Note: deferred sm.Close(), launcher.Close(), db.Close() run after this in LIFO order.
+	// sm was registered last (runs first), then launcher, then db (registered first, runs last).
+	slog.Info("shutting down", "reason", "signal")
 }
 
 // runTokenCreate implements the "token create" bootstrap subcommand.
