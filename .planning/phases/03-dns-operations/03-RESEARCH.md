@@ -828,11 +828,23 @@ Current Config defaults (from config.go):
 - `go.mod` — Confirmed CGO-free dependency stack (modernc.org/sqlite, playwright-go) enabling COMPAT-03 cross-compile
 - Go stdlib `net` package — `net.ParseIP()` for IP validation (standard, well-documented behavior)
 
-### Tertiary (LOW confidence — needs empirical verification)
+### Tertiary (VERIFIED 2026-02-28 via Playwright MCP — was LOW confidence)
 
-- Add Zone trigger link selector: "Add a new domain" sidebar link exact selector not verified via live site
-- Delete Zone confirmation dialog: whether `confirm()` dialog appears during zone deletion
-- Record row column indices for ParseRecordRow: exact `<td>` count and indices not confirmed against live DOM
+**Add Zone trigger:** `a[onclick*="add_zone"]` with onclick `launchWindow('#add_zone')`. The `div#add_zone` panel exists on the main page (always in DOM, hidden by CSS). Use `page.Click('a[onclick*="add_zone"]')` then wait for panel visible.
+
+**Delete Zone dialog is `prompt()` NOT `confirm()`:** `delete_dom()` calls `prompt("Confirm DELETION of "+name+"\nType 'DELETE' (without the quotes) to confirm")` — checks if response (lowercased) equals `"delete"`. Must use `page.OnDialog()` to auto-respond with `"DELETE"` before triggering the delete.
+
+**Record row td indices (10 tds, verified against live royalheadshots.online):**
+- td[0]: `class="hidden"` — zone ID
+- td[1]: `class="hidden"` — record ID
+- td[2]: `class="dns_view"` — record name (e.g. "royalheadshots.online")
+- td[3]: no class — record type (e.g. "NS", "A", "MX")
+- td[4]: no class — TTL (e.g. "172800")
+- td[5]: no class — priority ("-" for non-MX/SRV, numeric for MX/SRV)
+- td[6]: no class — content/data (e.g. "ns1.he.net")
+- td[7]: `class="hidden"` — DDNS flag ("0" or "1")
+- td[8]: no class — DDNS key button (empty for non-dynamic records)
+- td[9]: `class="dns_delete"` — delete img button
 
 ---
 
@@ -845,8 +857,8 @@ Current Config defaults (from config.go):
 - Existing page objects (what's there): HIGH — read directly from source files
 - Gaps (what needs building): HIGH — derived from direct codebase + requirements analysis
 - Field validation rules: HIGH for types/TTL values (from CONTEXT.md); MEDIUM for domain validation edge cases
-- Browser behavior (add zone panel, delete zone dialog): LOW — CONTEXT.md describes structure but JS behavior needs empirical confirmation
-- Record row column parsing: MEDIUM — CONTEXT.md describes columns but exact td indices need live verification
+- Browser behavior (add zone panel, delete zone dialog): HIGH — verified live 2026-02-28: add zone uses launchWindow('#add_zone'), delete uses prompt() not confirm(), must handle with page.OnDialog()
+- Record row column parsing: HIGH — 10 tds verified live: [0]=zoneID hidden, [1]=recordID hidden, [2]=name, [3]=type, [4]=TTL, [5]=priority, [6]=content, [7]=ddns hidden, [8]=ddns-key, [9]=delete
 - Cross-compile: HIGH — CGO-free stack confirmed from go.mod
 
 **Research date:** 2026-02-28

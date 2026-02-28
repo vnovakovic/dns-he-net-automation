@@ -1,6 +1,11 @@
 # Go build artifacts
 /server
+/server.exe
 /bin/
+
+# MCP tool directories and logs
+.playwright-mcp/
+alarm-mcp.log
 
 # SQLite database files (contain production data)
 *.db
