@@ -128,6 +128,8 @@ Recent decisions affecting current work:
 - [Phase 06]: Admin handlers call DB directly — store package only provides Open(); inline DB queries mirror REST handler pattern
 - [Phase 06]: token.RevokeByJTI separates admin JTI-only revocation from user account-scoped RevokeToken — admin has full authority, avoids extra DB join
 - [Phase 06]: Lazy token loading via htmx GET /admin/tokens/{accountID} — avoids N+1 queries on page load for multi-account deployments
+- [Phase 06]: handleSyncTrigger calls reconcile logic in-process — no HTTP round-trip to /api/v1/zones/{zoneID}/sync; avoids Bearer token management in admin layer
+- [Phase 06]: audit.Entry extended with ID+CreatedAt for List() scan — Write() INSERT does not use these fields, so all existing Write() callers are backward-compatible
 
 ### Pending Todos
 

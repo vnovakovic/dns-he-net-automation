@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: DNS Operations** - Zone CRUD, record CRUD for all v1 types (A, AAAA, CNAME, MX, TXT, SRV, CAA, NS), idempotency, field validation (completed 2026-02-28)
 - [x] **Phase 4: Production Hardening** - Vault credential storage, retry/backoff/circuit breaker, rate limiting, debug screenshots, Docker image, binary builds (completed 2026-02-28)
 - [x] **Phase 5: Observability + Sync Engine** - Prometheus metrics, audit log, sync/reconcile with dry-run support (completed 2026-02-28)
-- [ ] **Phase 6: BIND Import/Export + Admin UI** - BIND zone file import/export via miekg/dns, embedded templ+htmx admin panel
+- [x] **Phase 6: BIND Import/Export + Admin UI** - BIND zone file import/export via miekg/dns, embedded templ+htmx admin panel (completed 2026-02-28)
 
 ## Phase Details
 
@@ -138,4 +138,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. DNS Operations | 3/3 | Complete    | 2026-02-28 |
 | 4. Production Hardening | 4/4 | Complete   | 2026-02-28 |
 | 5. Observability + Sync Engine | 5/5 | Complete   | 2026-02-28 |
-| 6. BIND Import/Export + Admin UI | 3/4 | In Progress|  |
+| 6. BIND Import/Export + Admin UI | 4/4 | Complete   | 2026-02-28 |
