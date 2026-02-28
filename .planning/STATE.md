@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 Phase: 4 of 6 (Production Hardening)
 Plan: 2 of 4 in phase 4 (04-02 complete)
 Status: In Progress
-Last activity: 2026-02-28 -- Plan 04-02 complete, resilience layer: WithRetry + BreakerRegistry + PerTokenRateLimit + GlobalRateLimit + SessionManager jitter
+Last activity: 2026-02-28 -- Plan 04-01 complete, VaultProvider (KV v2, lazy fetch, TTL cache, token/AppRole auth) + 15 new Config env vars
 
 Progress: [█████████░] 65%
 
@@ -79,6 +79,11 @@ Recent decisions affecting current work:
 - [03-03]: ?type filter uses strings.ToUpper for case-insensitive matching; ?name filter uses strings.EqualFold (DNS names are case-insensitive)
 - [03-03]: WriteJSON added to response package following existing WriteError pattern; all handler success paths migrated
 - [03-03]: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 cross-compilation verified — modernc.org/sqlite is pure Go, no CGO needed
+- [04-01]: VaultConfig is a separate struct in credential package — avoids circular import (config imports credential, credential cannot import config)
+- [04-01]: HEAccountsJSON made optional (no required/notEmpty tags) — service can run Vault-only; EnvProvider remains for migration period
+- [04-01]: ListAccountIDs returns empty slice stub in VaultProvider — Vault KV list requires separate permission; account IDs come from SQLite
+- [04-01]: Always use client.KVv2(mount).Get() — never client.Logical().Read() — to avoid KV v2 data/ prefix issue
+- [04-01]: Double-checked locking for cache: RLock read, RUnlock, fetch, Lock write with re-check — prevents thundering herd on simultaneous cache miss
 - [04-02]: isTransientBrowserError excludes Vault credential errors — those are handled by stale cache (research Pitfall 5), not retry loops
 - [04-02]: BreakerRegistry.Execute wraps ErrOpenState into descriptive message rather than exposing gobreaker error directly — cleaner handler layer mapping to 503
 - [04-02]: PerTokenRateLimit falls back to RemoteAddr when no Bearer token — safe to register even before BearerAuth
@@ -96,5 +101,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 04-02-PLAN.md (resilience layer: WithRetry + BreakerRegistry + PerTokenRateLimit + GlobalRateLimit + SessionManager jitter)
+Stopped at: Completed 04-01-PLAN.md (VaultProvider with KV v2 lazy fetch, TTL cache, stale fallback, token/AppRole auth + 15 new Config env vars)
 Resume file: None

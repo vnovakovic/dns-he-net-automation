@@ -21,12 +21,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Vault Integration
 
-- [ ] **VAULT-01**: dns.he.net account credentials (username + password) are stored in HashiCorp Vault KV v2 at a configurable mount path (default `secret/data/dns-he-net/{account-id}`)
-- [ ] **VAULT-02**: Credentials are fetched lazily on first request to an account, not pre-fetched at startup
-- [ ] **VAULT-03**: Fetched credentials are cached in-memory with a configurable TTL (default 5 minutes) to reduce Vault load
+- [x] **VAULT-01**: dns.he.net account credentials (username + password) are stored in HashiCorp Vault KV v2 at a configurable mount path (default `secret/data/dns-he-net/{account-id}`)
+- [x] **VAULT-02**: Credentials are fetched lazily on first request to an account, not pre-fetched at startup
+- [x] **VAULT-03**: Fetched credentials are cached in-memory with a configurable TTL (default 5 minutes) to reduce Vault load
 - [ ] **VAULT-04**: Service verifies Vault connectivity at startup and reports status via the health endpoint
-- [ ] **VAULT-05**: If Vault is temporarily unreachable, existing cached credentials and active browser sessions continue to function (degraded mode)
-- [ ] **VAULT-06**: Vault authentication supports both token auth and AppRole auth, selectable via configuration
+- [x] **VAULT-05**: If Vault is temporarily unreachable, existing cached credentials and active browser sessions continue to function (degraded mode)
+- [x] **VAULT-06**: Vault authentication supports both token auth and AppRole auth, selectable via configuration
 
 ### Account Management
 
@@ -201,12 +201,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BROWSER-07 | Phase 1 | Pending |
 | BROWSER-08 | Phase 4 | Complete |
 | BROWSER-09 | Phase 4 | Pending |
-| VAULT-01 | Phase 4 | Pending |
-| VAULT-02 | Phase 4 | Pending |
-| VAULT-03 | Phase 4 | Pending |
+| VAULT-01 | Phase 4 | Complete |
+| VAULT-02 | Phase 4 | Complete |
+| VAULT-03 | Phase 4 | Complete |
 | VAULT-04 | Phase 4 | Pending |
-| VAULT-05 | Phase 4 | Pending |
-| VAULT-06 | Phase 4 | Pending |
+| VAULT-05 | Phase 4 | Complete |
+| VAULT-06 | Phase 4 | Complete |
 | ACCT-01 | Phase 2 | Complete |
 | ACCT-02 | Phase 2 | Complete |
 | ACCT-03 | Phase 2 | Complete |
