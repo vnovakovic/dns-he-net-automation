@@ -28,7 +28,13 @@ RUN PW_VERSION=$(grep 'playwright-go' go.mod | awk '{print $2}') && \
 
 # Stage 3: Minimal runtime image with Chromium.
 # Use ubuntu:noble (not alpine) -- Chromium on alpine requires musl workarounds.
+# Do NOT switch to chromedp/headless-shell -- incompatible with playwright-go (research decision).
 FROM ubuntu:noble
+
+# OCI standard image labels (OPS-05).
+LABEL org.opencontainers.image.title="dns-he-net-automation"
+LABEL org.opencontainers.image.description="REST API wrapper for dns.he.net via browser automation"
+LABEL org.opencontainers.image.source="https://github.com/vnovakov/dns-he-net-automation"
 
 # Install system dependencies: CA certs for HTTPS, tzdata for time zones.
 RUN apt-get update && \
@@ -43,11 +49,20 @@ RUN apt-get update && \
 COPY --from=builder /go/bin/playwright /usr/local/bin/playwright
 RUN playwright install --with-deps chromium
 
+# Create a non-root user for running the service (security hardening).
+RUN useradd --system --no-create-home --uid 1001 server
+
 # Copy the compiled server binary.
 COPY --from=builder /bin/server /usr/local/bin/server
 
+# Run as non-root user.
+USER server
+
 # Default environment variables for production deployment.
 ENV PLAYWRIGHT_HEADLESS=true
+
+# Screenshot dir -- mount a volume here to enable debug screenshots.
+# ENV SCREENSHOT_DIR=/screenshots
 
 # Expose the HTTP API port.
 EXPOSE 8080
