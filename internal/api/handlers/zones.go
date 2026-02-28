@@ -14,6 +14,7 @@ import (
 	playwright "github.com/playwright-community/playwright-go"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/middleware"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
+	"github.com/vnovakov/dns-he-net-automation/internal/audit"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
 	"github.com/vnovakov/dns-he-net-automation/internal/model"
@@ -176,6 +177,23 @@ func CreateZone(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Bre
 			})
 		})
 
+		auditResult := "success"
+		auditErrMsg := ""
+		if err != nil {
+			auditResult = "failure"
+			auditErrMsg = err.Error()
+		}
+		if auditErr := audit.Write(r.Context(), db, audit.Entry{
+			TokenID:   claims.ID,
+			AccountID: claims.AccountID,
+			Action:    "create",
+			Resource:  "zone:" + result.ID,
+			Result:    auditResult,
+			ErrorMsg:  auditErrMsg,
+		}); auditErr != nil {
+			slog.ErrorContext(r.Context(), "audit log write failed", "error", auditErr)
+		}
+
 		if err != nil {
 			switch {
 			case errors.Is(err, browser.ErrQueueTimeout):
@@ -243,6 +261,23 @@ func DeleteZone(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Bre
 				})
 			})
 		})
+
+		auditResult := "success"
+		auditErrMsg := ""
+		if err != nil {
+			auditResult = "failure"
+			auditErrMsg = err.Error()
+		}
+		if auditErr := audit.Write(r.Context(), db, audit.Entry{
+			TokenID:   claims.ID,
+			AccountID: claims.AccountID,
+			Action:    "delete",
+			Resource:  "zone:" + zoneID,
+			Result:    auditResult,
+			ErrorMsg:  auditErrMsg,
+		}); auditErr != nil {
+			slog.ErrorContext(r.Context(), "audit log write failed", "error", auditErr)
+		}
 
 		if err != nil {
 			switch {

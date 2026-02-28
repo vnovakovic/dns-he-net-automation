@@ -15,6 +15,7 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/api/middleware"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
 	"github.com/vnovakov/dns-he-net-automation/internal/api/validate"
+	"github.com/vnovakov/dns-he-net-automation/internal/audit"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
 	"github.com/vnovakov/dns-he-net-automation/internal/model"
@@ -340,6 +341,23 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 			})
 		})
 
+		auditResult := "success"
+		auditErrMsg := ""
+		if err != nil {
+			auditResult = "failure"
+			auditErrMsg = err.Error()
+		}
+		if auditErr := audit.Write(r.Context(), db, audit.Entry{
+			TokenID:   claims.ID,
+			AccountID: claims.AccountID,
+			Action:    "create",
+			Resource:  "record:" + result.ID,
+			Result:    auditResult,
+			ErrorMsg:  auditErrMsg,
+		}); auditErr != nil {
+			slog.ErrorContext(r.Context(), "audit log write failed", "error", auditErr)
+		}
+
 		if err != nil {
 			handleBrowserError(w, err)
 			return
@@ -452,6 +470,23 @@ func UpdateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 			})
 		})
 
+		auditResult := "success"
+		auditErrMsg := ""
+		if err != nil {
+			auditResult = "failure"
+			auditErrMsg = err.Error()
+		}
+		if auditErr := audit.Write(r.Context(), db, audit.Entry{
+			TokenID:   claims.ID,
+			AccountID: claims.AccountID,
+			Action:    "update",
+			Resource:  "record:" + recordID,
+			Result:    auditResult,
+			ErrorMsg:  auditErrMsg,
+		}); auditErr != nil {
+			slog.ErrorContext(r.Context(), "audit log write failed", "error", auditErr)
+		}
+
 		if err != nil {
 			if errors.Is(err, errRecordNotFound) {
 				response.WriteError(w, http.StatusNotFound, "record_not_found", "Record not found")
@@ -530,6 +565,23 @@ func DeleteRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 				})
 			})
 		})
+
+		auditResult := "success"
+		auditErrMsg := ""
+		if err != nil {
+			auditResult = "failure"
+			auditErrMsg = err.Error()
+		}
+		if auditErr := audit.Write(r.Context(), db, audit.Entry{
+			TokenID:   claims.ID,
+			AccountID: claims.AccountID,
+			Action:    "delete",
+			Resource:  "record:" + recordID,
+			Result:    auditResult,
+			ErrorMsg:  auditErrMsg,
+		}); auditErr != nil {
+			slog.ErrorContext(r.Context(), "audit log write failed", "error", auditErr)
+		}
 
 		if err != nil {
 			handleBrowserError(w, err)
