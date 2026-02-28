@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 3 of 6 (DNS Operations)
-Plan: 2 of 3 in phase 3 (03-02 complete)
-Status: In Progress
-Last activity: 2026-02-28 -- Plan 03-02 complete, record page object methods (ParseRecordRow/ListRecords/FindRecord) + record API handlers (GET/POST/GET/PUT/DELETE /api/v1/zones/{zoneID}/records)
+Plan: 3 of 3 in phase 3 (03-03 complete)
+Status: Phase Complete
+Last activity: 2026-02-28 -- Plan 03-03 complete, ValidateRecord (41 tests) + ?type/?name query filters + response.WriteJSON + Makefile build-linux
 
-Progress: [████████░░] 50%
+Progress: [█████████░] 60%
 
 ## Performance Metrics
 
@@ -29,7 +29,7 @@ Progress: [████████░░] 50%
 |-------|-------|-------|----------|
 | 01-foundation-browser-core | 3/3 | 25 min | 8 min |
 | 02-api-auth | 3/5 | 13 min | 4 min |
-| 03-dns-operations | 2/3 | 27 min | 14 min |
+| 03-dns-operations | 3/3 | 30 min | 10 min |
 
 **Recent Trend:**
 - Last 5 plans: 4 min, 6 min, 3 min, 12 min, 15 min
@@ -74,6 +74,10 @@ Recent decisions affecting current work:
 - [03-02]: ListRecords skips locked rows with slog.Warn rather than returning error -- SOA and system rows cannot be managed and should not block list operations
 - [03-02]: validateRecordFields extracted as shared helper to avoid duplicating MX/SRV validation between CreateRecord and UpdateRecord
 - [03-02]: UpdateRecord calls ParseRecordRow after FillAndSubmit to return authoritative server-side record state rather than echoing request body
+- [03-03]: validate package is self-contained — v1Types map replicated from handlers to avoid circular import; ValidateRecord is authoritative for all field constraints
+- [03-03]: ?type filter uses strings.ToUpper for case-insensitive matching; ?name filter uses strings.EqualFold (DNS names are case-insensitive)
+- [03-03]: WriteJSON added to response package following existing WriteError pattern; all handler success paths migrated
+- [03-03]: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 cross-compilation verified — modernc.org/sqlite is pure Go, no CGO needed
 
 ### Pending Todos
 
@@ -87,5 +91,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 03-02-PLAN.md (record page object ParseRecordRow/ListRecords/FindRecord + five record API handlers GET/POST/GET/PUT/DELETE /api/v1/zones/{zoneID}/records)
+Stopped at: Completed 03-03-PLAN.md (ValidateRecord with 41 tests + ?type/?name filters in ListRecords + response.WriteJSON + Makefile build-linux; Phase 3 complete)
 Resume file: None

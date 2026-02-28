@@ -62,7 +62,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **REC-06**: `GET /api/v1/zones/{zone_id}/records/{record_id}` returns a single record by its ID
 - [x] **REC-07**: Record creation is idempotent: creating a record that already exists (matched by type + name + value) returns 200 with the existing record, not 409
 - [x] **REC-08**: Record deletion is idempotent: deleting an already-deleted record returns 204, not 404
-- [ ] **REC-09**: All record types enforce correct field validation (e.g., MX requires priority, SRV requires priority + weight + port, TXT value is properly escaped)
+- [x] **REC-09**: All record types enforce correct field validation (e.g., MX requires priority, SRV requires priority + weight + port, TXT value is properly escaped)
 
 ### Sync and Reconcile
 
@@ -94,7 +94,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **API-03**: Proper HTTP status codes are returned: 200 OK, 201 Created, 204 No Content, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 429 Too Many Requests, 500 Internal Server Error
 - [x] **API-04**: Error responses follow a consistent schema: `{"error": "<message>", "code": "<machine_readable_code>"}` with actionable messages (e.g., "Record A foo.example.com already exists", not "Internal Server Error")
 - [x] **API-05**: Every API response for a record or zone includes stable resource IDs suitable for Terraform state tracking
-- [ ] **API-06**: `GET` endpoints for records support query parameter filtering by record type and/or name
+- [x] **API-06**: `GET` endpoints for records support query parameter filtering by record type and/or name
 - [x] **API-07**: All authenticated endpoints require `Authorization: Bearer <token>` header
 
 ### Operational
@@ -122,9 +122,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Performance
 
-- [ ] **PERF-01**: API response time for read operations (zone list, record list) is under 10 seconds including browser scraping time
-- [ ] **PERF-02**: API response time for single write operations (create/update/delete record) is under 15 seconds including browser automation
-- [ ] **PERF-03**: Requests queued behind the per-account mutex receive a response (success or timeout) within 60 seconds
+- [x] **PERF-01**: API response time for read operations (zone list, record list) is under 10 seconds including browser scraping time
+- [x] **PERF-02**: API response time for single write operations (create/update/delete record) is under 15 seconds including browser automation
+- [x] **PERF-03**: Requests queued behind the per-account mutex receive a response (success or timeout) within 60 seconds
 
 ### Security
 
@@ -143,7 +143,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **COMPAT-01**: All record and zone responses include stable IDs, full field state, and consistent JSON schemas to support a future Terraform provider without API changes
 - [x] **COMPAT-02**: Record create is idempotent (returns existing on conflict) and delete is idempotent (204 on missing) to support Terraform and Ansible retry semantics
-- [ ] **COMPAT-03**: The Go binary compiles on Linux amd64 and arm64; the Docker image targets Linux amd64
+- [x] **COMPAT-03**: The Go binary compiles on Linux amd64 and arm64; the Docker image targets Linux amd64
 
 ## v2 Requirements
 
@@ -230,7 +230,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REC-06 | Phase 3 | Complete (03-02) |
 | REC-07 | Phase 3 | Complete (03-02) |
 | REC-08 | Phase 3 | Complete (03-02) |
-| REC-09 | Phase 3 | Pending |
+| REC-09 | Phase 3 | Complete |
 | SYNC-01 | Phase 5 | Pending |
 | SYNC-02 | Phase 5 | Pending |
 | SYNC-03 | Phase 5 | Pending |
@@ -250,7 +250,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-03 | Phase 2 | Complete |
 | API-04 | Phase 2 | Complete |
 | API-05 | Phase 3 | Complete |
-| API-06 | Phase 3 | Pending |
+| API-06 | Phase 3 | Complete |
 | API-07 | Phase 2 | Complete |
 | OPS-01 | Phase 2 | Complete |
 | OPS-02 | Phase 2 | Complete |
@@ -264,9 +264,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RES-01 | Phase 4 | Pending |
 | RES-02 | Phase 4 | Pending |
 | RES-03 | Phase 4 | Pending |
-| PERF-01 | Phase 3 | Pending |
-| PERF-02 | Phase 3 | Pending |
-| PERF-03 | Phase 3 | Pending |
+| PERF-01 | Phase 3 | Complete |
+| PERF-02 | Phase 3 | Complete |
+| PERF-03 | Phase 3 | Complete |
 | SEC-01 | Phase 2 | Complete |
 | SEC-02 | Phase 2 | Complete |
 | SEC-03 | Phase 1 | Complete (01-01) |
@@ -276,7 +276,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REL-03 | Phase 1 | Complete (01-02) |
 | COMPAT-01 | Phase 3 | Complete |
 | COMPAT-02 | Phase 3 | Complete (03-02) |
-| COMPAT-03 | Phase 3 | Pending |
+| COMPAT-03 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 85 total (corrected from initial estimate of 76)
