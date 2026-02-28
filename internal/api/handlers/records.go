@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
 	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
 )
 
 // errRecordNotFound is a sentinel error returned by GetRecord and UpdateRecord
@@ -111,7 +113,8 @@ func validateRecordFields(rec model.Record) string {
 
 // ListRecords handles GET /api/v1/zones/{zoneID}/records.
 // Scrapes all editable DNS records for the zone and returns them as a JSON array.
-func ListRecords(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
+// Browser operations are wrapped with circuit breaker + retry (RES-02, RES-03).
+func ListRecords(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		zoneID := chi.URLParam(r, "zoneID")
 		if zoneID == "" {
@@ -128,14 +131,18 @@ func ListRecords(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 		start := time.Now()
 		var records []model.Record
 
-		err := sm.WithAccount(r.Context(), claims.AccountID, func(page playwright.Page) error {
-			zl := pages.NewZoneListPage(page)
-			list, err := zl.ListRecords(zoneID)
-			if err != nil {
-				return err
-			}
-			records = list
-			return nil
+		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
+					list, err := zl.ListRecords(zoneID)
+					if err != nil {
+						return err
+					}
+					records = list
+					return nil
+				})
+			})
 		})
 
 		if err != nil {
@@ -186,7 +193,8 @@ func ListRecords(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 
 // GetRecord handles GET /api/v1/zones/{zoneID}/records/{recordID}.
 // Returns a single DNS record by its dns.he.net internal ID.
-func GetRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
+// Browser operations are wrapped with circuit breaker + retry (RES-02, RES-03).
+func GetRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		zoneID := chi.URLParam(r, "zoneID")
 		recordID := chi.URLParam(r, "recordID")
@@ -200,19 +208,23 @@ func GetRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 		start := time.Now()
 		var found model.Record
 
-		err := sm.WithAccount(r.Context(), claims.AccountID, func(page playwright.Page) error {
-			zl := pages.NewZoneListPage(page)
-			records, err := zl.ListRecords(zoneID)
-			if err != nil {
-				return err
-			}
-			for _, rec := range records {
-				if rec.ID == recordID {
-					found = rec
-					return nil
-				}
-			}
-			return errRecordNotFound
+		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
+					records, err := zl.ListRecords(zoneID)
+					if err != nil {
+						return err
+					}
+					for _, rec := range records {
+						if rec.ID == recordID {
+							found = rec
+							return nil
+						}
+					}
+					return errRecordNotFound
+				})
+			})
 		})
 
 		if err != nil {
@@ -239,7 +251,8 @@ func GetRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 // Creates a DNS record. Idempotent: returns 200 with the existing record when an
 // identical record (same type+name+content or type-specific fields) already exists;
 // returns 201 when a new record is created.
-func CreateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
+// Browser operations are wrapped with circuit breaker + retry (RES-02, RES-03).
+func CreateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var rec model.Record
 		if err := json.NewDecoder(r.Body).Decode(&rec); err != nil {
@@ -280,47 +293,51 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 		var existed bool
 		var result model.Record
 
-		err := sm.WithAccount(r.Context(), claims.AccountID, func(page playwright.Page) error {
-			zl := pages.NewZoneListPage(page)
+		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
 
-			// Idempotency pre-check: find an existing identical record before creating.
-			existingID, findErr := zl.FindRecord(zoneID, rec)
-			if findErr == nil && existingID != "" {
-				// Record already exists — fetch it and return 200.
-				records, listErr := zl.ListRecords(zoneID)
-				if listErr != nil {
-					return listErr
-				}
-				for _, r := range records {
-					if r.ID == existingID {
-						result = r
-						break
+					// Idempotency pre-check: find an existing identical record before creating.
+					existingID, findErr := zl.FindRecord(zoneID, rec)
+					if findErr == nil && existingID != "" {
+						// Record already exists — fetch it and return 200.
+						records, listErr := zl.ListRecords(zoneID)
+						if listErr != nil {
+							return listErr
+						}
+						for _, r := range records {
+							if r.ID == existingID {
+								result = r
+								break
+							}
+						}
+						existed = true
+						return nil
 					}
-				}
-				existed = true
-				return nil
-			}
 
-			// Record does not exist — open the form and create it.
-			rf := pages.NewRecordFormPage(page)
-			if err := rf.OpenNewRecordForm(string(rec.Type)); err != nil {
-				return err
-			}
-			if err := rf.FillAndSubmit(rec); err != nil {
-				return err
-			}
+					// Record does not exist — open the form and create it.
+					rf := pages.NewRecordFormPage(page)
+					if err := rf.OpenNewRecordForm(string(rec.Type)); err != nil {
+						return err
+					}
+					if err := rf.FillAndSubmit(rec); err != nil {
+						return err
+					}
 
-			// After form submission the page reloads; find the new record ID.
-			newID, err := zl.FindRecord(zoneID, rec)
-			if err != nil {
-				return err
-			}
-			if newID == "" {
-				return errors.New("could not find newly created record after submission")
-			}
-			rec.ID = newID
-			result = rec
-			return nil
+					// After form submission the page reloads; find the new record ID.
+					newID, err := zl.FindRecord(zoneID, rec)
+					if err != nil {
+						return err
+					}
+					if newID == "" {
+						return errors.New("could not find newly created record after submission")
+					}
+					rec.ID = newID
+					result = rec
+					return nil
+				})
+			})
 		})
 
 		if err != nil {
@@ -347,7 +364,8 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 
 // UpdateRecord handles PUT /api/v1/zones/{zoneID}/records/{recordID}.
 // Updates an existing DNS record's fields. Returns 404 if the record does not exist.
-func UpdateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
+// Browser operations are wrapped with circuit breaker + retry (RES-02, RES-03).
+func UpdateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		zoneID := chi.URLParam(r, "zoneID")
 		recordID := chi.URLParam(r, "recordID")
@@ -389,45 +407,49 @@ func UpdateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 		start := time.Now()
 		var updated model.Record
 
-		err := sm.WithAccount(r.Context(), claims.AccountID, func(page playwright.Page) error {
-			zl := pages.NewZoneListPage(page)
+		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
 
-			// Navigate and verify the record exists before attempting edit.
-			if err := zl.NavigateToZone(zoneID); err != nil {
-				return err
-			}
+					// Navigate and verify the record exists before attempting edit.
+					if err := zl.NavigateToZone(zoneID); err != nil {
+						return err
+					}
 
-			rows, err := zl.GetRecordRows()
-			if err != nil {
-				return err
-			}
-			found := false
-			for _, row := range rows {
-				if row.ID == recordID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return errRecordNotFound
-			}
+					rows, err := zl.GetRecordRows()
+					if err != nil {
+						return err
+					}
+					found := false
+					for _, row := range rows {
+						if row.ID == recordID {
+							found = true
+							break
+						}
+					}
+					if !found {
+						return errRecordNotFound
+					}
 
-			rf := pages.NewRecordFormPage(page)
-			if err := rf.EditExistingRecord(recordID); err != nil {
-				return err
-			}
-			if err := rf.FillAndSubmit(rec); err != nil {
-				return err
-			}
+					rf := pages.NewRecordFormPage(page)
+					if err := rf.EditExistingRecord(recordID); err != nil {
+						return err
+					}
+					if err := rf.FillAndSubmit(rec); err != nil {
+						return err
+					}
 
-			// Parse the updated record from the refreshed page.
-			parsedRec, parseErr := zl.ParseRecordRow(recordID)
-			if parseErr != nil {
-				return parseErr
-			}
-			parsedRec.ZoneID = zoneID
-			updated = *parsedRec
-			return nil
+					// Parse the updated record from the refreshed page.
+					parsedRec, parseErr := zl.ParseRecordRow(recordID)
+					if parseErr != nil {
+						return parseErr
+					}
+					parsedRec.ZoneID = zoneID
+					updated = *parsedRec
+					return nil
+				})
+			})
 		})
 
 		if err != nil {
@@ -452,7 +474,8 @@ func UpdateRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 
 // DeleteRecord handles DELETE /api/v1/zones/{zoneID}/records/{recordID}.
 // Idempotent: always returns 204, whether or not the record existed.
-func DeleteRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
+// Browser operations are wrapped with circuit breaker + retry (RES-02, RES-03).
+func DeleteRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		zoneID := chi.URLParam(r, "zoneID")
 		recordID := chi.URLParam(r, "recordID")
@@ -465,43 +488,47 @@ func DeleteRecord(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 
 		start := time.Now()
 
-		err := sm.WithAccount(r.Context(), claims.AccountID, func(page playwright.Page) error {
-			zl := pages.NewZoneListPage(page)
+		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
 
-			if err := zl.NavigateToZone(zoneID); err != nil {
-				return err
-			}
+					if err := zl.NavigateToZone(zoneID); err != nil {
+						return err
+					}
 
-			// Idempotency: if record is not present, return success immediately.
-			rows, err := zl.GetRecordRows()
-			if err != nil {
-				return err
-			}
-			found := false
-			for _, row := range rows {
-				if row.ID == recordID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				// Record already gone — 204 is correct per REC-08.
-				return nil
-			}
+					// Idempotency: if record is not present, return success immediately.
+					rows, err := zl.GetRecordRows()
+					if err != nil {
+						return err
+					}
+					found := false
+					for _, row := range rows {
+						if row.ID == recordID {
+							found = true
+							break
+						}
+					}
+					if !found {
+						// Record already gone — 204 is correct per REC-08.
+						return nil
+					}
 
-			// Look up zone name and record type required by DeleteRecord JS call.
-			zoneName, err := zl.GetZoneName(zoneID)
-			if err != nil {
-				return err
-			}
+					// Look up zone name and record type required by DeleteRecord JS call.
+					zoneName, err := zl.GetZoneName(zoneID)
+					if err != nil {
+						return err
+					}
 
-			rec, parseErr := zl.ParseRecordRow(recordID)
-			if parseErr != nil {
-				return parseErr
-			}
+					rec, parseErr := zl.ParseRecordRow(recordID)
+					if parseErr != nil {
+						return parseErr
+					}
 
-			rf := pages.NewRecordFormPage(page)
-			return rf.DeleteRecord(recordID, zoneName, string(rec.Type))
+					rf := pages.NewRecordFormPage(page)
+					return rf.DeleteRecord(recordID, zoneName, string(rec.Type))
+				})
+			})
 		})
 
 		if err != nil {

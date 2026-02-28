@@ -176,6 +176,12 @@ func (p *VaultProvider) GetCredential(ctx context.Context, accountID string) (*C
 	return cred, nil
 }
 
+// Client returns the underlying Vault API client.
+// Used by main.go to build the vaultHealthFn closure for the health endpoint.
+func (p *VaultProvider) Client() *api.Client {
+	return p.client
+}
+
 // ListAccountIDs is a stub for VaultProvider.
 //
 // VaultProvider cannot enumerate accounts: Vault KV list requires a separate

@@ -20,7 +20,7 @@ func TestListRecords_NilClaims(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 
-	handler := ListRecords(nil, nil)
+	handler := ListRecords(nil, nil, nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -38,7 +38,7 @@ func TestCreateRecord_MissingBody(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 
-	handler := CreateRecord(nil, nil)
+	handler := CreateRecord(nil, nil, nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
@@ -58,7 +58,7 @@ func TestCreateRecord_UnsupportedType(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 
-	handler := CreateRecord(nil, nil)
+	handler := CreateRecord(nil, nil, nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnprocessableEntity {
@@ -78,7 +78,7 @@ func TestCreateRecord_MissingName(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 
-	handler := CreateRecord(nil, nil)
+	handler := CreateRecord(nil, nil, nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
@@ -98,7 +98,7 @@ func TestCreateRecord_MXMissingPriority(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 
-	handler := CreateRecord(nil, nil)
+	handler := CreateRecord(nil, nil, nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
@@ -118,7 +118,7 @@ func TestCreateRecord_SRVMissingPort(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 
-	handler := CreateRecord(nil, nil)
+	handler := CreateRecord(nil, nil, nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
@@ -137,7 +137,7 @@ func TestGetRecord_NilClaims(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 
-	handler := GetRecord(nil, nil)
+	handler := GetRecord(nil, nil, nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -156,7 +156,7 @@ func TestDeleteRecord_NilClaims(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 	rr := httptest.NewRecorder()
 
-	handler := DeleteRecord(nil, nil)
+	handler := DeleteRecord(nil, nil, nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {

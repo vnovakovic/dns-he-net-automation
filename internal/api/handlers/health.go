@@ -18,13 +18,19 @@ type HealthResponse struct {
 }
 
 // HealthHandler returns a handler for GET /healthz.
-// It checks SQLite via db.PingContext and browser via launcher.IsConnected().
+// It checks SQLite via db.PingContext, browser via launcher.IsConnected(),
+// and Vault connectivity via vaultHealthFn (VAULT-04).
 // OPS-01: returns 200 {"status": "ok", "checks": {...}} or 503 {"status": "degraded", ...}.
+//
+// vaultHealthFn returns:
+//   - "ok" when Vault is reachable and healthy
+//   - "degraded: <reason>" when Vault is unreachable or sealed
+//   - "disabled" when running without Vault (EnvProvider mode)
 //
 // SECURITY (SEC-01): The error string from db.PingContext may appear in the health response.
 // This is acceptable for an internal health endpoint — it does not expose credentials or
 // HE.net account data. The endpoint is unauthenticated (internal observability only).
-func HealthHandler(db *sql.DB, launcher *browser.Launcher) http.HandlerFunc {
+func HealthHandler(db *sql.DB, launcher *browser.Launcher, vaultHealthFn func() string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		checks := make(map[string]string)
 		status := "ok"
@@ -43,6 +49,14 @@ func HealthHandler(db *sql.DB, launcher *browser.Launcher) http.HandlerFunc {
 			checks["browser"] = "ok"
 		} else {
 			checks["browser"] = "not connected"
+			status = "degraded"
+		}
+
+		// Vault connectivity status (VAULT-04).
+		// vaultHealthFn is a closure injected at startup from main.go.
+		vaultStatus := vaultHealthFn()
+		checks["vault"] = vaultStatus
+		if vaultStatus != "ok" && vaultStatus != "disabled" {
 			status = "degraded"
 		}
 

@@ -19,6 +19,7 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/config"
 	"github.com/vnovakov/dns-he-net-automation/internal/credential"
+	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
 	"github.com/vnovakov/dns-he-net-automation/internal/store"
 	"github.com/vnovakov/dns-he-net-automation/internal/token"
 )
@@ -75,21 +76,44 @@ func main() {
 
 	slog.Info("database ready", "db_path", cfg.DBPath)
 
-	// Initialize credential provider from HE_ACCOUNTS JSON env var.
-	// SECURITY (SEC-03): We log account IDs only, never usernames or passwords.
-	credProvider, err := credential.NewEnvProvider(cfg.HEAccountsJSON)
-	if err != nil {
-		slog.Error("failed to initialize credential provider", "error", err)
-		os.Exit(1)
+	// Initialize credential provider: VaultProvider when VAULT_ADDR is set,
+	// EnvProvider (HE_ACCOUNTS) otherwise (VAULT-04, backward compatible).
+	// SECURITY (SEC-03): Never log credential values (usernames, passwords, tokens).
+	var credProvider credential.Provider
+	if cfg.VaultAddr != "" {
+		slog.Info("using Vault credential provider", "vault_addr", cfg.VaultAddr, "auth_method", cfg.VaultAuthMethod)
+		vaultProvider, err := credential.NewVaultProvider(&credential.VaultConfig{
+			VaultAddr:             cfg.VaultAddr,
+			VaultAuthMethod:       cfg.VaultAuthMethod,
+			VaultToken:            cfg.VaultToken,
+			VaultAppRoleRoleID:    cfg.VaultAppRoleRoleID,
+			VaultAppRoleSecretID:  cfg.VaultAppRoleSecretID,
+			VaultMountPath:        cfg.VaultMountPath,
+			VaultSecretPathTmpl:   cfg.VaultSecretPathTmpl,
+			VaultCredentialTTLSec: cfg.VaultCredentialTTLSec,
+		})
+		if err != nil {
+			slog.Error("failed to initialize Vault provider", "error", err)
+			os.Exit(1)
+		}
+		credProvider = vaultProvider
+	} else {
+		slog.Info("using env credential provider (HE_ACCOUNTS)")
+		envProvider, err := credential.NewEnvProvider(cfg.HEAccountsJSON)
+		if err != nil {
+			slog.Error("failed to initialize env credential provider", "error", err)
+			os.Exit(1)
+		}
+		credProvider = envProvider
+		// Log account IDs only for EnvProvider -- VaultProvider returns empty list (stub).
+		// SECURITY (SEC-03): Account IDs only, never usernames or passwords.
+		ids, err := credProvider.ListAccountIDs(context.Background())
+		if err != nil {
+			slog.Error("failed to list account IDs", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("accounts loaded", "count", len(ids), "ids", ids)
 	}
-
-	ids, err := credProvider.ListAccountIDs(context.Background())
-	if err != nil {
-		slog.Error("failed to list account IDs", "error", err)
-		os.Exit(1)
-	}
-	// Log account IDs only -- never log usernames or passwords (SEC-03).
-	slog.Info("accounts loaded", "count", len(ids), "ids", ids)
 
 	// Initialize Playwright browser launcher (BROWSER-01).
 	launcher, err := browser.NewLauncher(cfg.PlaywrightHeadless, cfg.PlaywrightSlowMo)
@@ -111,12 +135,36 @@ func main() {
 	sm := browser.NewSessionManager(launcher, credProvider, queueTimeout, opTimeout, reloginAge, minOpDelay, maxOpDelay, cfg.ScreenshotDir)
 	defer sm.Close()
 
+	// Initialize per-account circuit breaker registry (RES-02, RES-03).
+	breakers := resilience.NewBreakerRegistry(cfg.CircuitBreakerMaxFailures, cfg.CircuitBreakerTimeoutSec)
+
+	// Build vaultHealthFn closure for the /healthz endpoint (VAULT-04).
+	// When VaultProvider is active, calls Vault Sys().Health() on each request.
+	// When EnvProvider is active, returns "disabled" (no Vault configured).
+	var vaultHealthFn func() string
+	if cfg.VaultAddr != "" {
+		vp := credProvider.(*credential.VaultProvider)
+		vaultHealthFn = func() string {
+			health, err := vp.Client().Sys().Health()
+			if err != nil {
+				return "degraded: " + err.Error()
+			}
+			if !health.Initialized || health.Sealed {
+				return "degraded: vault sealed or uninitialized"
+			}
+			return "ok"
+		}
+	} else {
+		vaultHealthFn = func() string { return "disabled" }
+	}
+
 	// Set up OS signal handling for graceful shutdown (SIGTERM for Docker/k8s, SIGINT for Ctrl+C).
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	// Wire chi router and start HTTP server (Phase 2).
-	handler := api.NewRouter(db, sm, launcher, []byte(cfg.JWTSecret))
+	handler := api.NewRouter(db, sm, launcher, []byte(cfg.JWTSecret), breakers,
+		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn)
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: handler,

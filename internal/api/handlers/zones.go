@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
 	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
 )
 
 // ZoneResponse is the JSON representation of a DNS zone returned by the API.
@@ -35,7 +37,8 @@ type createZoneRequest struct {
 // ListZones handles GET /api/v1/zones.
 // Scrapes the live zone list for the authenticated account and returns all zones
 // with their IDs, names, account_id, and the time the scrape occurred.
-func ListZones(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
+// Browser operations are wrapped with circuit breaker + retry (RES-02, RES-03).
+func ListZones(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := middleware.ClaimsFromContext(r.Context())
 		if claims == nil {
@@ -48,20 +51,24 @@ func ListZones(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 
 		var zones []model.Zone
 
-		err := sm.WithAccount(r.Context(), claims.AccountID, func(page playwright.Page) error {
-			zl := pages.NewZoneListPage(page)
-			if err := zl.NavigateToZoneList(); err != nil {
-				return err
-			}
-			list, err := zl.ListZones()
-			if err != nil {
-				return err
-			}
-			for i := range list {
-				list[i].AccountID = claims.AccountID
-			}
-			zones = list
-			return nil
+		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
+					if err := zl.NavigateToZoneList(); err != nil {
+						return err
+					}
+					list, err := zl.ListZones()
+					if err != nil {
+						return err
+					}
+					for i := range list {
+						list[i].AccountID = claims.AccountID
+					}
+					zones = list
+					return nil
+				})
+			})
 		})
 
 		if err != nil {
@@ -102,7 +109,8 @@ func ListZones(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 // Creates a new DNS zone on dns.he.net. Idempotent: if the zone already exists,
 // returns 200 with the existing zone. If newly created, returns 201.
 // Requires admin role (enforced by RequireAdmin middleware in router).
-func CreateZone(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
+// Browser operations are wrapped with circuit breaker + retry (RES-02, RES-03).
+func CreateZone(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req createZoneRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -130,38 +138,42 @@ func CreateZone(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 		var result ZoneResponse
 		var existed bool
 
-		err := sm.WithAccount(r.Context(), claims.AccountID, func(page playwright.Page) error {
-			zl := pages.NewZoneListPage(page)
+		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
 
-			// Idempotency pre-check: if zone already exists, return it without creating.
-			if err := zl.NavigateToZoneList(); err != nil {
-				return err
-			}
-			existingID, lookupErr := zl.GetZoneID(req.Name)
-			if lookupErr == nil && existingID != "" {
-				// Zone already exists — populate result and signal 200.
-				result = ZoneResponse{
-					ID:        existingID,
-					Name:      req.Name,
-					AccountID: claims.AccountID,
-					FetchedAt: time.Now(),
-				}
-				existed = true
-				return nil
-			}
+					// Idempotency pre-check: if zone already exists, return it without creating.
+					if err := zl.NavigateToZoneList(); err != nil {
+						return err
+					}
+					existingID, lookupErr := zl.GetZoneID(req.Name)
+					if lookupErr == nil && existingID != "" {
+						// Zone already exists — populate result and signal 200.
+						result = ZoneResponse{
+							ID:        existingID,
+							Name:      req.Name,
+							AccountID: claims.AccountID,
+							FetchedAt: time.Now(),
+						}
+						existed = true
+						return nil
+					}
 
-			// Zone does not exist — create it.
-			zoneID, err := zl.AddZone(req.Name)
-			if err != nil {
-				return err
-			}
-			result = ZoneResponse{
-				ID:        zoneID,
-				Name:      req.Name,
-				AccountID: claims.AccountID,
-				FetchedAt: time.Now(),
-			}
-			return nil
+					// Zone does not exist — create it.
+					zoneID, err := zl.AddZone(req.Name)
+					if err != nil {
+						return err
+					}
+					result = ZoneResponse{
+						ID:        zoneID,
+						Name:      req.Name,
+						AccountID: claims.AccountID,
+						FetchedAt: time.Now(),
+					}
+					return nil
+				})
+			})
 		})
 
 		if err != nil {
@@ -195,7 +207,8 @@ func CreateZone(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 // DeleteZone handles DELETE /api/v1/zones/{zoneID}.
 // Deletes a DNS zone on dns.he.net. Idempotent: if the zone does not exist, returns 204.
 // Requires admin role (enforced by RequireAdmin middleware in router).
-func DeleteZone(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
+// Browser operations are wrapped with circuit breaker + retry (RES-02, RES-03).
+func DeleteZone(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		zoneID := chi.URLParam(r, "zoneID")
 		if zoneID == "" {
@@ -211,20 +224,24 @@ func DeleteZone(db *sql.DB, sm *browser.SessionManager) http.HandlerFunc {
 
 		start := time.Now()
 
-		err := sm.WithAccount(r.Context(), claims.AccountID, func(page playwright.Page) error {
-			zl := pages.NewZoneListPage(page)
+		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, claims.AccountID, func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
 
-			// Idempotency: look up zone name. If not found, zone is already gone — success.
-			if err := zl.NavigateToZoneList(); err != nil {
-				return err
-			}
-			zoneName, nameErr := zl.GetZoneName(zoneID)
-			if nameErr != nil {
-				// Zone not found — already deleted; 204 is the correct idempotent response.
-				return nil
-			}
+					// Idempotency: look up zone name. If not found, zone is already gone — success.
+					if err := zl.NavigateToZoneList(); err != nil {
+						return err
+					}
+					zoneName, nameErr := zl.GetZoneName(zoneID)
+					if nameErr != nil {
+						// Zone not found — already deleted; 204 is the correct idempotent response.
+						return nil
+					}
 
-			return zl.DeleteZone(zoneID, zoneName)
+					return zl.DeleteZone(zoneID, zoneName)
+				})
+			})
 		})
 
 		if err != nil {

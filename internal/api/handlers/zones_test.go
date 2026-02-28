@@ -14,7 +14,7 @@ import (
 // TestListZones_NilClaims verifies that ListZones returns 401 when no auth claims
 // are present in the request context.
 func TestListZones_NilClaims(t *testing.T) {
-	handler := ListZones(nil, nil)
+	handler := ListZones(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/zones", nil)
 	rr := httptest.NewRecorder()
@@ -29,7 +29,7 @@ func TestListZones_NilClaims(t *testing.T) {
 // TestCreateZone_MissingBody verifies that CreateZone returns 400 when the
 // request body is empty (not valid JSON).
 func TestCreateZone_MissingBody(t *testing.T) {
-	handler := CreateZone(nil, nil)
+	handler := CreateZone(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/zones", nil)
 	rr := httptest.NewRecorder()
@@ -44,7 +44,7 @@ func TestCreateZone_MissingBody(t *testing.T) {
 // TestCreateZone_EmptyName verifies that CreateZone returns 400 when the
 // request body contains an empty zone name.
 func TestCreateZone_EmptyName(t *testing.T) {
-	handler := CreateZone(nil, nil)
+	handler := CreateZone(nil, nil, nil)
 
 	body := bytes.NewBufferString(`{"name":""}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/zones", body)
@@ -61,7 +61,7 @@ func TestCreateZone_EmptyName(t *testing.T) {
 // TestCreateZone_NameTooLong verifies that CreateZone returns 400 when the
 // zone name exceeds 253 characters.
 func TestCreateZone_NameTooLong(t *testing.T) {
-	handler := CreateZone(nil, nil)
+	handler := CreateZone(nil, nil, nil)
 
 	longName := strings.Repeat("a", 254)
 	body := bytes.NewBufferString(`{"name":"` + longName + `"}`)
@@ -79,7 +79,7 @@ func TestCreateZone_NameTooLong(t *testing.T) {
 // TestDeleteZone_EmptyID verifies that DeleteZone returns 400 when the
 // zoneID URL parameter is empty.
 func TestDeleteZone_EmptyID(t *testing.T) {
-	handler := DeleteZone(nil, nil)
+	handler := DeleteZone(nil, nil, nil)
 
 	// Build a chi router context with an empty zoneID parameter.
 	chiCtx := chi.NewRouteContext()
