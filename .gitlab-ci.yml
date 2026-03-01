@@ -1,0 +1,63 @@
+# Custom CI pipeline — replaces Auto DevOps.
+#
+# WHY custom pipeline (not Auto DevOps):
+#   Auto DevOps assumes the project builds a Docker image via /build/build.sh.
+#   This project is a Go binary, not a container. Auto DevOps tries to push to
+#   the GitLab Container Registry and fails when the Docker client is outdated.
+#   A custom pipeline runs the actual Go build and test steps directly.
+#
+# WHY templ generate before build:
+#   The project uses github.com/a-h/templ for type-safe HTML templates.
+#   templ generate produces *_templ.go files from *.templ sources. Without this
+#   step the build fails with "undefined: templates.*" because the generated
+#   Go code is in .gitignore and is not committed to the repo.
+#   (The generated files are committed here, but the generate step is included
+#   for correctness in case the policy changes.)
+
+stages:
+  - build
+  - test
+
+variables:
+  GOPATH: "$CI_PROJECT_DIR/.go"
+  GOFLAGS: "-mod=mod"
+
+# Cache Go module downloads and build cache between jobs.
+# WHY cache .go/pkg/mod (not just GOPATH):
+#   go mod download stores modules under $GOPATH/pkg/mod. Caching this directory
+#   avoids re-downloading the same modules on every pipeline run, cutting ~30s
+#   off cold builds. The cache key includes go.sum so it is invalidated when
+#   dependencies change.
+.go-cache: &go-cache
+  cache:
+    key:
+      files:
+        - go.sum
+    paths:
+      - .go/pkg/mod
+      - .go/build-cache
+
+build:
+  stage: build
+  image: golang:1.25
+  <<: *go-cache
+  before_script:
+    - go install github.com/a-h/templ/cmd/templ@latest
+  script:
+    - templ generate
+    - go build ./...
+  artifacts:
+    paths:
+      - dns-he-net-automation
+    expire_in: 1 hour
+    when: on_success
+
+test:
+  stage: test
+  image: golang:1.25
+  <<: *go-cache
+  before_script:
+    - go install github.com/a-h/templ/cmd/templ@latest
+  script:
+    - templ generate
+    - go test ./...
