@@ -65,7 +65,7 @@ func SyncPage(accounts []model.Account, data PageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-header\"><h2>Zone Sync</h2></div><div class=\"card\"><p>Trigger a reconciliation sync for a zone. Paste the desired DNS records as JSON.</p><form hx-post=\"/admin/sync/trigger\" hx-target=\"#sync-result\" hx-swap=\"innerHTML\" hx-indicator=\"#sync-spinner\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"account_id\">Account</label> <select id=\"account_id\" name=\"account_id\" required><option value=\"\">Select account...</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-header\"><h2>Zone Sync</h2></div><div class=\"card\"><p>Trigger a reconciliation sync for a zone. Paste the desired DNS records as JSON.</p><p class=\"text-muted\" style=\"margin-top:0;\">This form is intended for programmatic/scripted use (e.g. Ansible, Terraform pipelines). For BIND zone file import, use the <a href=\"/admin/zones\">Zones page</a> — each zone has an \"Import BIND\" button.</p><form hx-post=\"/admin/sync/trigger\" hx-target=\"#sync-result\" hx-swap=\"innerHTML\" hx-indicator=\"#sync-spinner\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"account_id\">Account</label> <select id=\"account_id\" name=\"account_id\" required><option value=\"\">Select account...</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -77,7 +77,7 @@ func SyncPage(accounts []model.Account, data PageData) templ.Component {
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(acc.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 42, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 46, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -90,7 +90,7 @@ func SyncPage(accounts []model.Account, data PageData) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(acc.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 42, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 46, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -103,7 +103,7 @@ func SyncPage(accounts []model.Account, data PageData) templ.Component {
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(acc.Username)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 42, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 46, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -173,7 +173,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(zoneID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 83, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 87, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -187,7 +187,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(zoneID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 85, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 89, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -238,7 +238,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(r.Op)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 105, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 109, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -251,7 +251,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(string(r.Record.Type))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 107, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 111, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
@@ -264,7 +264,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(r.Record.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 108, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 112, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -292,7 +292,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(r.ErrorMsg)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 116, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 120, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -312,7 +312,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(string(rec.Type))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 124, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 128, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 				if templ_7745c5c3_Err != nil {
@@ -325,7 +325,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 				var templ_7745c5c3_Var16 string
 				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(rec.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 125, Col: 21}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 129, Col: 21}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 				if templ_7745c5c3_Err != nil {
@@ -344,7 +344,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 				var templ_7745c5c3_Var17 string
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(string(rec.Type))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 133, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 137, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 				if templ_7745c5c3_Err != nil {
@@ -357,7 +357,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 				var templ_7745c5c3_Var18 string
 				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(rec.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 134, Col: 21}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 138, Col: 21}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 				if templ_7745c5c3_Err != nil {
@@ -376,7 +376,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 				var templ_7745c5c3_Var19 string
 				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(string(rec.Type))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 142, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 146, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 				if templ_7745c5c3_Err != nil {
@@ -389,7 +389,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(rec.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 143, Col: 21}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 147, Col: 21}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 				if templ_7745c5c3_Err != nil {
@@ -418,7 +418,7 @@ func SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, resu
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("Add: %d  Update: %d  Delete: %d", len(plan.Add), len(plan.Update), len(plan.Delete)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 159, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/sync.templ`, Line: 163, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {

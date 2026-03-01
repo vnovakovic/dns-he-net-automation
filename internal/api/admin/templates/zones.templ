@@ -1,49 +1,167 @@
 package templates
 
-import "github.com/vnovakov/dns-he-net-automation/internal/model"
+import (
+	"fmt"
+	"github.com/vnovakov/dns-he-net-automation/internal/bindio"
+	"github.com/vnovakov/dns-he-net-automation/internal/model"
+)
 
-// ZonesPage renders the zones read-only view.
+// ZonesPage renders the zones view with per-account Load Zones buttons.
 //
-// WHY read-only (no create/delete buttons):
-//   Zone CRUD via the admin UI is intentionally absent — it requires browser automation
-//   that involves scraping account credentials and is better handled via the REST API.
-//   (CONTEXT.md deferred: zone create/delete via UI is out of scope for this phase)
+// WHY on-demand loading (not eager fetch on page load):
+//   Loading zones requires a Playwright browser session per account — it logs
+//   into dns.he.net and scrapes the zone list. Doing this on every page load
+//   would be too expensive for an informational page. The "Load Zones" button
+//   triggers a single htmx GET that runs the browser session only for that
+//   account, only when requested.
 //
-// WHY show accounts without zone data (not trigger browser sessions):
-//   Fetching zones requires browser automation per account — a Playwright session must
-//   log into dns.he.net and scrape the zone list. Doing this on every page load would
-//   be prohibitively expensive. Instead the handler shows accounts with a note directing
-//   operators to use the REST API for zone details.
-templ ZonesPage(zonesByAccount map[string][]model.Zone, accounts []model.Account, data PageData) {
+// WHY zonesByAccount param removed vs original template:
+//   The original signature accepted a pre-populated map that was always empty
+//   (the handler never filled it, by design). The new design drops the map —
+//   zones are always fetched on demand via htmx, never pre-loaded.
+templ ZonesPage(accounts []model.Account, data PageData) {
 	@Layout(data) {
 		<div class="page-header">
 			<h2>Zones</h2>
-			<p class="text-muted">Read-only view. To add or remove zones, use the REST API.</p>
+			<p class="text-muted">Click "Load Zones" to fetch live zone data from dns.he.net. Zone add/remove requires the REST API.</p>
 		</div>
 		for _, acc := range accounts {
 			<div class="card" style="margin-bottom:1rem;">
-				<h3>{ acc.ID } <span class="text-muted">({ acc.Username })</span></h3>
-				if zones, ok := zonesByAccount[acc.ID]; ok && len(zones) > 0 {
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th>Zone ID</th>
-								<th>Name</th>
-							</tr>
-						</thead>
-						<tbody>
-							for _, z := range zones {
-								<tr>
-									<td><code>{ z.ID }</code></td>
-									<td>{ z.Name }</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				} else {
-					<p class="text-muted">No zones loaded (browser session required).</p>
-				}
+				<div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;">
+					<h3 style="margin:0;">{ acc.ID } <span class="text-muted">({ acc.Username })</span></h3>
+					<button
+						class="btn btn-primary btn-sm"
+						hx-get={ "/admin/zones/" + acc.ID + "/refresh" }
+						hx-target={ "#zones-" + acc.ID }
+						hx-swap="innerHTML"
+						hx-indicator={ "#zones-spinner-" + acc.ID }>
+						Load Zones
+					</button>
+					<span id={ "zones-spinner-" + acc.ID } class="htmx-indicator text-muted">Loading...</span>
+				</div>
+				<div id={ "zones-" + acc.ID }>
+					<p class="text-muted">Click "Load Zones" to fetch zones from dns.he.net (requires browser session).</p>
+				</div>
 			</div>
 		}
 	}
+}
+
+// ZonesForAccount renders the zones table for one account as an htmx partial.
+// Returned by GET /admin/zones/{accountID}/refresh and inserted into #zones-{accountID}.
+//
+// WHY per-zone Export link and Import <details> panel:
+//   Export is a plain anchor with download attribute — a single click fetches
+//   the BIND file and prompts Save As. No JS required.
+//   Import uses <details>/<summary> for a collapsible inline form — native HTML,
+//   no JS, stays visible in context of the zone list without navigating away.
+templ ZonesForAccount(accountID string, zones []model.Zone) {
+	if len(zones) == 0 {
+		<p class="text-muted">No zones found for this account.</p>
+	} else {
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th>Zone ID</th>
+					<th>Name</th>
+					<th>Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, z := range zones {
+					<tr>
+						<td><code>{ z.ID }</code></td>
+						<td>{ z.Name }</td>
+						<td>
+							<div style="display:flex;gap:0.5rem;align-items:flex-start;flex-wrap:wrap;">
+								<a
+									href={ templ.SafeURL("/admin/zones/" + z.ID + "/export?account_id=" + accountID) }
+									class="btn btn-sm"
+									download={ z.Name + ".zone" }>
+									Export BIND
+								</a>
+								<details>
+									<summary class="btn btn-sm" style="cursor:pointer;list-style:none;display:inline-block;">Import BIND</summary>
+									@ZoneImportForm(accountID, z.ID, z.Name)
+								</details>
+							</div>
+							<div id={ "import-result-" + z.ID }></div>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
+}
+
+// ZoneImportForm renders the BIND import textarea and submit button for a single zone.
+// The form is wrapped in a <details> element by ZonesForAccount so it collapses cleanly.
+//
+// WHY htmx target is outside the <details> (not inside the form):
+//   The result div (#import-result-{zoneID}) lives outside the <details> element,
+//   so the import result is visible even after the operator closes the form panel.
+//
+// WHY dry_run checked by default:
+//   Consistent with the Sync page — safe default is preview. Operators must uncheck
+//   to apply changes, preventing accidental DNS mutations on first use.
+templ ZoneImportForm(accountID, zoneID, zoneName string) {
+	<form
+		hx-post={ "/admin/zones/" + zoneID + "/import" }
+		hx-target={ "#import-result-" + zoneID }
+		hx-swap="innerHTML"
+		style="margin-top:0.5rem;min-width:28rem;">
+		<input type="hidden" name="account_id" value={ accountID }/>
+		<div class="form-group">
+			<label>BIND Zone File (additive only — existing records not in the file are kept)</label>
+			<textarea name="bind_zone" rows="8" placeholder={ "$ORIGIN " + zoneName + ".\n$TTL 3600\nwww A 1.2.3.4" }></textarea>
+		</div>
+		<div class="form-row">
+			<label class="checkbox-label">
+				<input type="checkbox" name="dry_run" value="true" checked/>
+				Dry run (preview only — no changes applied)
+			</label>
+			<button type="submit" class="btn btn-primary btn-sm">Import</button>
+		</div>
+	</form>
+}
+
+// ZoneImportResult renders the BIND import result as an htmx partial.
+// Inserted into #import-result-{zoneID} after POST /admin/zones/{zoneID}/import.
+//
+// WHY show a skipped records table (not just a count):
+//   CONTEXT.md decision: the import response must list which records were skipped
+//   and why (unsupported type, SOA, parse error) so operators know what was omitted.
+//   This matches the dry-run-style report format specified in CONTEXT.md.
+templ ZoneImportResult(zoneName string, dryRun bool, applied int, skipped []bindio.SkippedRecord, hadErrors bool) {
+	<div style="margin-top:0.75rem;padding:0.75rem;border:1px solid var(--border);border-radius:0.5rem;">
+		if hadErrors {
+			<div class="error-banner">Some records failed to import. Check the audit log for details.</div>
+		}
+		if dryRun {
+			<p>Dry run: <strong>{ fmt.Sprintf("%d", applied) } change(s)</strong> would be applied to <code>{ zoneName }</code>.</p>
+		} else {
+			<p>Import complete: <strong>{ fmt.Sprintf("%d", applied) } record(s)</strong> applied to <code>{ zoneName }</code>.</p>
+		}
+		if len(skipped) > 0 {
+			<p class="text-muted">{ fmt.Sprintf("%d", len(skipped)) } record(s) skipped (unsupported or SOA):</p>
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Type</th>
+						<th>Reason</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, s := range skipped {
+						<tr>
+							<td>{ s.Name }</td>
+							<td><code>{ s.Type }</code></td>
+							<td class="text-muted">{ s.Reason }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
 }

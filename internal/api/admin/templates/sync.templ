@@ -28,6 +28,10 @@ templ SyncPage(accounts []model.Account, data PageData) {
 		</div>
 		<div class="card">
 			<p>Trigger a reconciliation sync for a zone. Paste the desired DNS records as JSON.</p>
+			<p class="text-muted" style="margin-top:0;">
+				This form is intended for programmatic/scripted use (e.g. Ansible, Terraform pipelines).
+				For BIND zone file import, use the <a href="/admin/zones">Zones page</a> — each zone has an "Import BIND" button.
+			</p>
 			<form
 				hx-post="/admin/sync/trigger"
 				hx-target="#sync-result"
