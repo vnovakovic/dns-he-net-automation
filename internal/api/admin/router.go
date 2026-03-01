@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"strconv"
 	"strings"
@@ -69,9 +70,14 @@ func RegisterAdminRoutes(
 		// Static assets served without auth — CSS and JS must load before the login
 		// page renders. Without this exclusion, the browser would redirect CSS/JS requests
 		// to /admin/login, making the login form unstyled. (Rule 2 auto-fix applied here)
+		// WHY fs.Sub: the embed FS stores files at "static/admin.css" etc.
+		// After StripPrefix removes "/admin/static/", the FileServer sees just "admin.css"
+		// and looks for it at the FS root — not found (404). fs.Sub re-roots the FS at
+		// the "static/" subdirectory so "admin.css" resolves correctly.
+		staticSubFS, _ := fs.Sub(staticFS, "static")
 		r.Handle("/static/*",
 			http.StripPrefix("/admin/static/",
-				http.FileServer(http.FS(staticFS))),
+				http.FileServer(http.FS(staticSubFS))),
 		)
 
 		// Login and logout routes — outside the AdminAuth middleware.
