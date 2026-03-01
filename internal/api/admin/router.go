@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	playwright "github.com/playwright-community/playwright-go"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/vnovakov/dns-he-net-automation/internal/api/admin/templates"
 	"github.com/vnovakov/dns-he-net-automation/internal/audit"
 	"github.com/vnovakov/dns-he-net-automation/internal/bindio"
@@ -86,7 +89,7 @@ func RegisterAdminRoutes(
 		// Login must be accessible to unauthenticated users (obvious).
 		// Logout is outside auth so it works even if the cookie becomes invalid.
 		r.Get("/login", handleLoginPage())
-		r.Post("/login", handleLoginPost(username, password, signingKey))
+		r.Post("/login", handleLoginPost(db, username, password, signingKey))
 		r.Get("/logout", handleLogout())
 
 		// Protected routes — all require AdminAuth (Basic Auth or session cookie).
@@ -134,6 +137,13 @@ func RegisterAdminRoutes(
 
 			// Audit log page (handler replaced by plan 04).
 			r.Get("/audit", handleAuditPage(db))
+
+			// User management — admin-only (guarded inside each handler).
+			// Account Users are DB-backed operator accounts that each see only their own
+			// HE accounts. Only the env-configured Server Admin can create/delete them.
+			r.Get("/users", handleUsersPage(db))
+			r.Post("/users", handleUserCreate(db))
+			r.Delete("/users/{userID}", handleUserDelete(db))
 		})
 	})
 }
@@ -150,10 +160,16 @@ func handleLoginPage() http.HandlerFunc {
 // On success: issues session cookie, redirects to /admin/accounts.
 // On failure: re-renders login form with error message (401 status).
 //
+// WHY two-stage auth (admin env check first, then DB users):
+//   1. Admin (env): stateless — no DB needed. Checked first so the admin can always log in
+//      even if the DB is corrupt or the users table is empty.
+//   2. Account Users (DB bcrypt): checked second. On match, issues a user session cookie
+//      scoped to that user's ID — downstream handlers filter accounts by this ID.
+//
 // WHY 401 status on wrong credentials (not redirect):
 //   curl scripts checking status codes get the right signal. The browser still
 //   sees the re-rendered form because the response body contains HTML.
-func handleLoginPost(username, password string, signingKey []byte) http.HandlerFunc {
+func handleLoginPost(db *sql.DB, adminUsername, adminPassword string, signingKey []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
@@ -162,17 +178,53 @@ func handleLoginPost(username, password string, signingKey []byte) http.HandlerF
 		u := r.FormValue("username")
 		p := r.FormValue("password")
 
-		if u == username && p == password {
-			IssueSessionCookie(w, u, signingKey)
+		// 1. Admin check (env vars) — unchanged behavior.
+		if u == adminUsername && p == adminPassword {
+			IssueAdminSessionCookie(w, signingKey)
 			http.Redirect(w, r, "/admin/accounts", http.StatusFound)
 			return
 		}
 
-		// Wrong credentials — re-render login form with error message.
+		// 2. Account user check — bcrypt verify against DB.
+		userID, err := authenticateAccountUser(r.Context(), db, u, p)
+		if err == nil {
+			IssueUserSessionCookie(w, userID, signingKey)
+			http.Redirect(w, r, "/admin/accounts", http.StatusFound)
+			return
+		}
+
+		// 3. Wrong credentials — re-render login form with error message.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = templates.LoginPage("Invalid username or password").Render(r.Context(), w)
 	}
+}
+
+// authenticateAccountUser looks up a user by username and verifies the password with bcrypt.
+// Returns the user's ID (= username) on success, or an error if not found or password wrong.
+//
+// WHY bcrypt.CompareHashAndPassword (not == comparison):
+//   Passwords are stored as bcrypt hashes (not plaintext). Direct comparison would never match.
+//   bcrypt.CompareHashAndPassword extracts the salt from the stored hash and rehashes the
+//   supplied password at the same cost — timing is constant regardless of password length.
+//
+// WHY NOT distinguish "user not found" from "wrong password" in the return:
+//   Returning the same error for both cases prevents username enumeration attacks — an
+//   attacker cannot determine whether a given username exists by observing the response.
+func authenticateAccountUser(ctx context.Context, db *sql.DB, username, password string) (string, error) {
+	var id, hash string
+	err := db.QueryRowContext(ctx,
+		`SELECT id, password_hash FROM users WHERE username = ?`,
+		username,
+	).Scan(&id, &hash)
+	if err != nil {
+		// sql.ErrNoRows (user not found) or other DB error — treat both as auth failure.
+		return "", errors.New("invalid credentials")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
+		return "", errors.New("invalid credentials")
+	}
+	return id, nil
 }
 
 // handleLogout clears the session cookie and redirects to login.
@@ -196,22 +248,39 @@ func handleLogout() http.HandlerFunc {
 //   replace function bodies, not the wiring in RegisterAdminRoutes. (Checker issue 5 fix)
 
 // listAccountsFromDB queries the accounts table and returns model.Account records ordered by
-// created_at ASC. Extracted as a helper because both handleAccountsPage and handleTokensPage
-// need the same account list.
+// created_at ASC. Extracted as a helper because multiple page handlers need the same list.
+//
+// WHY userID param (not always SELECT * without WHERE):
+//   Account Users must only see their own HE accounts. Passing "" (admin session) returns all
+//   accounts with no WHERE clause. Passing a non-empty userID adds WHERE user_id = ? so the
+//   Account User cannot see accounts owned by the admin or other users.
+//   The filter is applied in SQL, not in Go, to keep result sets small (no over-fetching).
 //
 // WHY not use store.ListAccounts:
 //   The store package only exposes Open() for DB initialization. Account CRUD is done via
 //   inline DB queries (same pattern as REST handlers in internal/api/handlers/accounts.go).
 //   The admin UI follows the same pattern — direct DB access, no HTTP round-trips to /api/v1.
-func listAccountsFromDB(r *http.Request, db *sql.DB) ([]model.Account, error) {
-	rows, err := db.QueryContext(r.Context(),
-		// WHY include password in SELECT:
-		//   model.Account.Password has json:"-" so it never leaks into API responses.
-		//   The admin UI handler needs it to populate the struct for any display or
-		//   credential-update operations. Omitting it here would require a separate
-		//   query whenever the password is needed.
-		`SELECT id, username, password, created_at, updated_at FROM accounts ORDER BY created_at ASC`,
-	)
+func listAccountsFromDB(r *http.Request, db *sql.DB, userID string) ([]model.Account, error) {
+	var rows *sql.Rows
+	var err error
+
+	if userID == "" {
+		// Admin session — return all accounts regardless of owner.
+		rows, err = db.QueryContext(r.Context(),
+			// WHY include password in SELECT:
+			//   model.Account.Password has json:"-" so it never leaks into API responses.
+			//   The admin UI handler needs it to populate the struct for any display or
+			//   credential-update operations. Omitting it here would require a separate
+			//   query whenever the password is needed.
+			`SELECT id, username, password, created_at, updated_at FROM accounts ORDER BY created_at ASC`,
+		)
+	} else {
+		// Account User session — filter to only their own HE accounts.
+		rows, err = db.QueryContext(r.Context(),
+			`SELECT id, username, password, created_at, updated_at FROM accounts WHERE user_id = ? ORDER BY created_at ASC`,
+			userID,
+		)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +341,7 @@ func listZonesFromDB(ctx context.Context, db *sql.DB, accountID string) ([]model
 
 func handleAccountsPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accounts, err := listAccountsFromDB(r, db)
+		accounts, err := listAccountsFromDB(r, db, getSessionUserID(r))
 		if err != nil {
 			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
 			return
@@ -290,7 +359,7 @@ func handleAccountsPage(db *sql.DB) http.HandlerFunc {
 			zonesByAccount[acc.ID] = zones
 		}
 
-		data := templates.PageData{Title: "Accounts", ActivePage: "accounts"}
+		data := templates.PageData{Title: "Accounts", ActivePage: "accounts", IsAdmin: isAdminSession(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.AccountsPage(accounts, zonesByAccount, data).Render(r.Context(), w)
 	}
@@ -342,9 +411,17 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 		}
 
 		// SECURITY (SEC-03): password is never logged — only the accountID appears in errors.
+		//
+		// WHY user_id from session (not a form field):
+		//   Accepting user_id from the form would allow any authenticated user to create accounts
+		//   owned by a different user ID (horizontal privilege escalation). Taking it from the
+		//   verified session context ensures the account belongs to the logged-in user.
+		//   Admin sessions return "" for user_id — admin-created accounts are "admin-owned"
+		//   (visible to admin, not visible to any account user).
+		userID := getSessionUserID(r)
 		_, err := db.ExecContext(r.Context(),
-			`INSERT INTO accounts (id, username, password) VALUES (?, ?, ?)`,
-			accountID, username, password,
+			`INSERT INTO accounts (id, username, password, user_id) VALUES (?, ?, ?, ?)`,
+			accountID, username, password, userID,
 		)
 		if err != nil {
 			errStr := err.Error()
@@ -408,12 +485,12 @@ func handleAccountDelete(db *sql.DB, sm *browser.SessionManager) http.HandlerFun
 
 func handleTokensPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accounts, err := listAccountsFromDB(r, db)
+		accounts, err := listAccountsFromDB(r, db, getSessionUserID(r))
 		if err != nil {
 			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
 			return
 		}
-		data := templates.PageData{Title: "Tokens", ActivePage: "tokens"}
+		data := templates.PageData{Title: "Tokens", ActivePage: "tokens", IsAdmin: isAdminSession(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.TokensPage(accounts, data).Render(r.Context(), w)
 	}
@@ -511,7 +588,7 @@ func handleTokenRevoke(db *sql.DB) http.HandlerFunc {
 //   only when the operator explicitly triggers them — not on page load.
 func handleZonesPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accounts, err := listAccountsFromDB(r, db)
+		accounts, err := listAccountsFromDB(r, db, getSessionUserID(r))
 		if err != nil {
 			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
 			return
@@ -527,7 +604,7 @@ func handleZonesPage(db *sql.DB) http.HandlerFunc {
 			zonesByAccount[acc.ID] = zones
 		}
 
-		data := templates.PageData{Title: "Zones", ActivePage: "zones"}
+		data := templates.PageData{Title: "Zones", ActivePage: "zones", IsAdmin: isAdminSession(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.ZonesPage(accounts, zonesByAccount, data).Render(r.Context(), w)
 	}
@@ -541,12 +618,12 @@ func handleZonesPage(db *sql.DB) http.HandlerFunc {
 //   to type account IDs manually.
 func handleSyncPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accounts, err := listAccountsFromDB(r, db)
+		accounts, err := listAccountsFromDB(r, db, getSessionUserID(r))
 		if err != nil {
 			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
 			return
 		}
-		data := templates.PageData{Title: "Sync", ActivePage: "sync"}
+		data := templates.PageData{Title: "Sync", ActivePage: "sync", IsAdmin: isAdminSession(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.SyncPage(accounts, data).Render(r.Context(), w)
 	}
@@ -1080,8 +1157,159 @@ func handleAuditPage(db *sql.DB) http.HandlerFunc {
 			totalPages = 1
 		}
 
-		data := templates.PageData{Title: "Audit Log", ActivePage: "audit"}
+		data := templates.PageData{Title: "Audit Log", ActivePage: "audit", IsAdmin: isAdminSession(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.AuditPage(entries, pageNum, totalPages, data).Render(r.Context(), w)
+	}
+}
+
+// handleUsersPage renders the user management page (GET /admin/users).
+// Admin-only: Account Users cannot manage other users.
+//
+// WHY admin-only guard inside handler (not a separate middleware):
+//   The Users routes are registered inside the AdminAuth group (all routes require auth).
+//   The additional admin-only check is a simple in-handler guard — adding a separate
+//   middleware for three routes would add more complexity than it removes.
+func handleUsersPage(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminSession(r) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		rows, err := db.QueryContext(r.Context(),
+			`SELECT id, username, created_at FROM users ORDER BY created_at ASC`,
+		)
+		if err != nil {
+			http.Error(w, "Failed to list users", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var users []templates.UserRow
+		for rows.Next() {
+			var u templates.UserRow
+			if err := rows.Scan(&u.ID, &u.Username, &u.CreatedAt); err != nil {
+				http.Error(w, "Failed to scan users", http.StatusInternalServerError)
+				return
+			}
+			users = append(users, u)
+		}
+		if err := rows.Err(); err != nil {
+			http.Error(w, "Failed to list users", http.StatusInternalServerError)
+			return
+		}
+		if users == nil {
+			users = []templates.UserRow{}
+		}
+
+		data := templates.PageData{Title: "Users", ActivePage: "users", IsAdmin: true}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.UsersPage(users, data).Render(r.Context(), w)
+	}
+}
+
+// handleUserCreate creates a new Account User (POST /admin/users).
+// Admin-only. Bcrypt-hashes the password before storing.
+//
+// WHY bcrypt cost 12:
+//   Cost 12 is ~300ms on a modern CPU — expensive enough to deter brute-force attacks
+//   against stolen DB rows, cheap enough that admin UI creates feel instant. OWASP
+//   recommends a cost factor that takes ≥250ms; 12 is the standard Go recommendation.
+func handleUserCreate(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminSession(r) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		// writeFormError sends an error partial via htmx retarget — same pattern as handleAccountCreate.
+		// Must return 200 so htmx actually performs the swap.
+		writeFormError := func(msg string) {
+			w.Header().Set("HX-Retarget", "#user-register-error")
+			w.Header().Set("HX-Reswap", "innerHTML")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_ = templates.UserRegisterError(msg).Render(r.Context(), w)
+		}
+
+		if err := r.ParseForm(); err != nil {
+			writeFormError("Bad request: could not parse form.")
+			return
+		}
+		username := strings.TrimSpace(r.FormValue("username"))
+		// WHY not trimming password: see handleAccountCreate comment.
+		password := r.FormValue("password")
+		if username == "" {
+			writeFormError("Username is required.")
+			return
+		}
+		if password == "" {
+			writeFormError("Password is required.")
+			return
+		}
+
+		// Hash the password before storing — never store plaintext. (SEC-03)
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+		if err != nil {
+			writeFormError("Failed to hash password: " + err.Error())
+			return
+		}
+
+		// id = username: immutable label, same as the unique username.
+		// See migration 006 comment on WHY id = username.
+		_, err = db.ExecContext(r.Context(),
+			`INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)`,
+			username, username, string(hash),
+		)
+		if err != nil {
+			errStr := err.Error()
+			if strings.Contains(errStr, "UNIQUE") || strings.Contains(errStr, "PRIMARY KEY") {
+				writeFormError(fmt.Sprintf("Username %q is already registered.", username))
+			} else {
+				writeFormError("Failed to create user: " + errStr)
+			}
+			return
+		}
+
+		// Fetch the DB-assigned created_at for the template.
+		var u templates.UserRow
+		err = db.QueryRowContext(r.Context(),
+			`SELECT id, username, created_at FROM users WHERE id = ?`,
+			username,
+		).Scan(&u.ID, &u.Username, &u.CreatedAt)
+		if err != nil {
+			writeFormError("User was created but could not be retrieved — reload the page.")
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.UserRegisterSuccess(u).Render(r.Context(), w)
+	}
+}
+
+// handleUserDelete removes an Account User by ID (DELETE /admin/users/{userID}).
+// Admin-only. CASCADE in the DB removes all HE accounts owned by this user.
+//
+// WHY CASCADE is relied on (not explicit account deletion in Go):
+//   The ON DELETE CASCADE FK on accounts.user_id means the DB removes the user's accounts
+//   and (via the accounts→zones cascade) their zones automatically. Application-level
+//   cascade loops would be racy (concurrent requests) and harder to audit. The DB is the
+//   right place for referential integrity.
+func handleUserDelete(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminSession(r) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		userID := chi.URLParam(r, "userID")
+		if _, err := db.ExecContext(r.Context(),
+			`DELETE FROM users WHERE id = ?`,
+			userID,
+		); err != nil {
+			http.Error(w, "Failed to delete user", http.StatusInternalServerError)
+			return
+		}
+		// Return empty 200 — htmx swaps target row with empty body, removing it from DOM.
+		w.WriteHeader(http.StatusOK)
 	}
 }

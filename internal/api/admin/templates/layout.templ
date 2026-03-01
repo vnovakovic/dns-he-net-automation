@@ -2,9 +2,15 @@ package templates
 
 // PageData carries common data passed to every page component.
 // All admin page handlers populate this struct before calling templ components.
+//
+// WHY IsAdmin bool (not a role string):
+//   The only conditional in the UI is "show Users nav link or not". A bool is simpler
+//   and avoids stringly-typed role comparisons in templates. If more role-specific
+//   rendering is needed in future, extend PageData then.
 type PageData struct {
 	Title      string
-	ActivePage string // "accounts", "tokens", "zones", "sync", "audit"
+	ActivePage string // "accounts", "tokens", "zones", "sync", "audit", "users"
+	IsAdmin    bool   // true for env-configured Server Admin; false for Account Users
 }
 
 // Layout is the base HTML template wrapping all admin pages.
@@ -35,6 +41,9 @@ templ Layout(data PageData) {
 				@NavLink("/admin/zones", "Zones", data.ActivePage == "zones")
 				@NavLink("/admin/sync", "Sync", data.ActivePage == "sync")
 				@NavLink("/admin/audit", "Audit Log", data.ActivePage == "audit")
+				if data.IsAdmin {
+					@NavLink("/admin/users", "Users", data.ActivePage == "users")
+				}
 				<div class="sidebar-footer">
 					<a href="/admin/logout" class="nav-link">Logout</a>
 				</div>
