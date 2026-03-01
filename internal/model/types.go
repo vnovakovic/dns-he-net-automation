@@ -30,13 +30,17 @@ const (
 	RecordTypeSRV   RecordType = "SRV"
 )
 
-// Account represents a dns.he.net account's metadata.
-// SECURITY (SEC-03): This struct stores only metadata (id, username).
-// Passwords are NEVER stored here or in the database -- they live only in the
-// credential provider (env var in Phase 1, Vault in Phase 4).
+// Account represents a dns.he.net account with its HE credentials.
+//
+// SECURITY (SEC-03):
+//   Password is stored in SQLite (0600 permissions) as of migration 005.
+//   It is tagged json:"-" so it is NEVER serialized into REST API responses.
+//   The REST API returns only id, username, created_at — password stays server-side.
+//   For higher-security deployments use the Vault credential provider instead.
 type Account struct {
 	ID        string    `json:"id"`
 	Username  string    `json:"username"`
+	Password  string    `json:"-"` // Never in API responses; used by DBProvider and admin UI
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

@@ -77,8 +77,13 @@ func main() {
 
 	slog.Info("database ready", "db_path", cfg.DBPath)
 
-	// Initialize credential provider: VaultProvider when VAULT_ADDR is set,
-	// EnvProvider (HE_ACCOUNTS) otherwise (VAULT-04, backward compatible).
+	// Initialize credential provider. Priority: Vault > HE_ACCOUNTS env var > DB.
+	//
+	// WHY three-tier priority:
+	//   Vault   — production: secret rotation, audit log, multi-host (highest security)
+	//   Env var — CI/test: credentials injected at runtime without a Vault instance
+	//   DB      — default for self-hosted: credentials stored in admin UI, no env var needed
+	//
 	// SECURITY (SEC-03): Never log credential values (usernames, passwords, tokens).
 	var credProvider credential.Provider
 	if cfg.VaultAddr != "" {
@@ -98,7 +103,8 @@ func main() {
 			os.Exit(1)
 		}
 		credProvider = vaultProvider
-	} else {
+	} else if cfg.HEAccountsJSON != "" {
+		// HE_ACCOUNTS env var present — use EnvProvider (backward compatible with Phase 1-4).
 		slog.Info("using env credential provider (HE_ACCOUNTS)")
 		envProvider, err := credential.NewEnvProvider(cfg.HEAccountsJSON)
 		if err != nil {
@@ -106,14 +112,19 @@ func main() {
 			os.Exit(1)
 		}
 		credProvider = envProvider
-		// Log account IDs only for EnvProvider -- VaultProvider returns empty list (stub).
-		// SECURITY (SEC-03): Account IDs only, never usernames or passwords.
+		// Log account IDs only — SECURITY (SEC-03): never log usernames or passwords.
 		ids, err := credProvider.ListAccountIDs(context.Background())
 		if err != nil {
 			slog.Error("failed to list account IDs", "error", err)
 			os.Exit(1)
 		}
-		slog.Info("accounts loaded", "count", len(ids), "ids", ids)
+		slog.Info("accounts loaded from env", "count", len(ids), "ids", ids)
+	} else {
+		// No Vault, no HE_ACCOUNTS — use DB-backed provider.
+		// Credentials are read from the accounts table (set via admin UI).
+		// This is the default for self-hosted single-operator deployments.
+		slog.Info("using DB credential provider (credentials managed via admin UI)")
+		credProvider = credential.NewDBProvider(db)
 	}
 
 	// Initialize Prometheus metrics registry (OBS-01).

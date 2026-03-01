@@ -2,37 +2,37 @@ package templates
 
 import "github.com/vnovakov/dns-he-net-automation/internal/model"
 
-// AccountsPage renders the accounts management page.
-// htmx handles inline row removal and new-account form without full page reloads.
-templ AccountsPage(accounts []model.Account, data PageData) {
+// AccountsPage renders the full accounts management page.
+// Each account is a card with nested zones loaded from the DB.
+//
+// WHY cards instead of a flat table:
+//   Account now carries credentials (username + password) and owns a list of zones.
+//   A card layout makes the account→zones hierarchy visually explicit. A flat table
+//   cannot show nested zones without additional disclosure widgets.
+//
+// WHY zonesByAccount pre-populated from DB (not live-fetched on page load):
+//   Live-fetching requires a Playwright browser session per account — too expensive
+//   for a page load. Zones are stored in the DB after "Load zones from HE" and
+//   served directly. The "Load zones from HE" button triggers a browser session
+//   only when the operator explicitly requests it.
+templ AccountsPage(accounts []model.Account, zonesByAccount map[string][]model.Zone, data PageData) {
 	@Layout(data) {
 		<div class="page-header">
 			<h2>Accounts</h2>
+			<p class="text-muted">Each account stores dns.he.net credentials. Zones are fetched on demand and cached here for use by the API.</p>
 		</div>
-		<div class="card">
-			<table id="accounts-table" class="data-table">
-				<thead>
-					<tr>
-						<th>ID</th>
-						<th>Username</th>
-						<th>Created</th>
-						<th>Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					for _, acc := range accounts {
-						@AccountRow(acc)
-					}
-				</tbody>
-			</table>
+		<div id="accounts-cards">
+			for _, acc := range accounts {
+				@AccountCard(acc, zonesByAccount[acc.ID])
+			}
 		</div>
 		<div class="card" style="margin-top:1rem;">
 			<h3>Register Account</h3>
-			<p class="text-muted">Account ID is an internal identifier (e.g. "primary"). It does not need to match a domain name.</p>
+			<p class="text-muted">Account ID is an internal label (e.g. "primary"). Username and password are your dns.he.net login credentials.</p>
 			<div id="account-register-error" style="margin-bottom:0.5rem;"></div>
 			<form
 				hx-post="/admin/accounts"
-				hx-target="#accounts-table tbody"
+				hx-target="#accounts-cards"
 				hx-swap="beforeend"
 				hx-on::after-request="this.reset()">
 				<div class="form-row">
@@ -44,6 +44,10 @@ templ AccountsPage(accounts []model.Account, data PageData) {
 						<label for="username">HE Username</label>
 						<input type="text" id="username" name="username" placeholder="your@email.com" required/>
 					</div>
+					<div class="form-group">
+						<label for="password">HE Password</label>
+						<input type="password" id="password" name="password" placeholder="dns.he.net password" required/>
+					</div>
 					<button type="submit" class="btn btn-primary">Register</button>
 				</div>
 			</form>
@@ -51,40 +55,118 @@ templ AccountsPage(accounts []model.Account, data PageData) {
 	}
 }
 
-// AccountRow renders a single account table row.
-// Used both for full-page render and as htmx response for new account creation.
-templ AccountRow(acc model.Account) {
-	<tr id={ "account-row-" + acc.ID }>
-		<td><code>{ acc.ID }</code></td>
-		<td>{ acc.Username }</td>
-		<td>{ acc.CreatedAt.Format("2006-01-02 15:04") }</td>
-		<td>
-			<button
-				class="btn btn-danger btn-sm"
-				hx-delete={ "/admin/accounts/" + acc.ID }
-				hx-target={ "#account-row-" + acc.ID }
-				hx-swap="outerHTML swap:500ms"
-				hx-confirm={ "Remove account '" + acc.ID + "' and all its tokens?" }>
-				Remove
-			</button>
-		</td>
-	</tr>
+// AccountCard renders a single account as a card with nested zones.
+// Used for full-page render inside AccountsPage and as the htmx partial
+// returned on successful account registration (appended to #accounts-cards).
+//
+// WHY hx-target="closest .card" for Remove (not a CSS id selector):
+//   Account IDs may contain dots (e.g. "eyodwa.org"), which are valid in HTML id
+//   attributes but break CSS id selectors — "#account-eyodwa.org" is parsed as
+//   "element with id=account-eyodwa AND class=org". Using "closest .card" avoids
+//   this by targeting the nearest ancestor .card element without any id dependency.
+//
+// WHY sanitizeHTMLID for the zones container id/hx-target:
+//   Same dot-in-CSS-selector issue. The zones div id uses sanitized ID ("eyodwa-org")
+//   so that "#account-zones-eyodwa-org" is a valid CSS selector. The original
+//   account ID (with dots) is still used for all URL paths and DB queries.
+templ AccountCard(acc model.Account, zones []model.Zone) {
+	<div class="card" style="margin-bottom:1rem;">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+			<div>
+				<h3 style="margin:0;">{ acc.ID } <span class="text-muted" style="font-size:0.9em;">({ acc.Username })</span></h3>
+				<small class="text-muted">Registered { acc.CreatedAt.Format("2006-01-02") }</small>
+			</div>
+			<div style="display:flex;gap:0.5rem;align-items:center;">
+				<button
+					class="btn btn-primary btn-sm"
+					hx-get={ "/admin/accounts/" + acc.ID + "/load-zones" }
+					hx-target={ "#account-zones-" + sanitizeHTMLID(acc.ID) }
+					hx-swap="innerHTML"
+					hx-indicator={ "#zones-spinner-" + sanitizeHTMLID(acc.ID) }>
+					Load zones from HE
+				</button>
+				<span id={ "zones-spinner-" + sanitizeHTMLID(acc.ID) } class="htmx-indicator text-muted">Loading...</span>
+				<button
+					class="btn btn-danger btn-sm"
+					hx-delete={ "/admin/accounts/" + acc.ID }
+					hx-target="closest .card"
+					hx-swap="outerHTML swap:500ms"
+					hx-confirm={ "Remove account '" + acc.ID + "' and all its zones and tokens?" }>
+					Remove
+				</button>
+			</div>
+		</div>
+		<div id={ "account-zones-" + sanitizeHTMLID(acc.ID) }>
+			@AccountZonesList(acc.ID, zones)
+		</div>
+	</div>
+}
+
+// AccountZonesList renders the zones sub-list for one account.
+// Used on page load (from DB via AccountCard) and as the htmx partial
+// returned by GET /admin/accounts/{accountID}/load-zones.
+//
+// WHY hx-target="closest tr" for Remove zone (not a CSS id selector):
+//   Zone names can contain dots (same dot-in-CSS issue as account IDs).
+//   "closest tr" targets the enclosing table row without any id dependency.
+templ AccountZonesList(accountID string, zones []model.Zone) {
+	if len(zones) == 0 {
+		<p class="text-muted" style="margin:0;">No zones loaded. Click "Load zones from HE" to fetch the zone list from dns.he.net.</p>
+	} else {
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th>Zone Name</th>
+					<th>HE Zone ID</th>
+					<th>Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, z := range zones {
+					<tr>
+						<td>{ z.Name }</td>
+						<td>
+							if z.ID != "" {
+								<code>{ z.ID }</code>
+							} else {
+								<span class="text-muted">—</span>
+							}
+						</td>
+						<td>
+							<button
+								class="btn btn-danger btn-sm"
+								hx-delete={ "/admin/accounts/" + accountID + "/zones/" + z.Name }
+								hx-target="closest tr"
+								hx-swap="outerHTML swap:500ms"
+								hx-confirm={ "Remove zone '" + z.Name + "' from account '" + accountID + "'?" }>
+								Remove
+							</button>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
 }
 
 // AccountRegisterSuccess is the htmx partial returned on successful account registration.
-// Returns the new AccountRow (appended to tbody by htmx) and clears the error div OOB.
+// Appended to #accounts-cards by htmx and clears the error div via OOB swap.
 //
-// WHY hx-swap-oob on the error div:
-//   If a previous failed registration left an error message in #account-register-error,
-//   this OOB swap replaces it with an empty div, clearing the error without a page reload.
+// WHY hx-swap-oob on error div:
+//   If a previous failed registration left an error in #account-register-error,
+//   this OOB swap replaces it with an empty div without a page reload.
 templ AccountRegisterSuccess(acc model.Account) {
-	@AccountRow(acc)
+	@AccountCard(acc, nil)
 	<div id="account-register-error" hx-swap-oob="true"></div>
 }
 
 // AccountRegisterError renders an error message for #account-register-error.
-// Delivered via HX-Retarget header when registration fails, so the error appears
-// in the form card instead of being silently swallowed by htmx.
+// Delivered via HX-Retarget header when registration fails — see handleAccountCreate.
+//
+// WHY HX-Retarget (not http.Error):
+//   http.Error returns 4xx/5xx which htmx swallows silently — the form resets but
+//   no error is shown. Retargeting to the error div with status 200 makes htmx
+//   actually perform the swap and the error becomes visible to the operator.
 templ AccountRegisterError(msg string) {
 	<p class="error-banner" style="margin:0;">{ msg }</p>
 }

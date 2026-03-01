@@ -6,92 +6,98 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/model"
 )
 
-// ZonesPage renders the zones view with per-account Load Zones buttons.
+// ZonesPage renders the zones view, reading zones from the DB (not live-fetching).
+// Zones are populated by the "Load zones from HE" button on the Accounts page.
 //
-// WHY on-demand loading (not eager fetch on page load):
-//   Loading zones requires a Playwright browser session per account — it logs
-//   into dns.he.net and scrapes the zone list. Doing this on every page load
-//   would be too expensive for an informational page. The "Load Zones" button
-//   triggers a single htmx GET that runs the browser session only for that
-//   account, only when requested.
+// WHY read from DB (not live-fetch on page load):
+//   Live-fetching requires a Playwright browser session per account. Doing this
+//   on every Zones page load is too expensive. The Accounts page provides the
+//   "Load zones from HE" button to fetch and persist zones into the DB; the
+//   Zones page then serves that cached data instantly.
 //
-// WHY zonesByAccount param removed vs original template:
-//   The original signature accepted a pre-populated map that was always empty
-//   (the handler never filled it, by design). The new design drops the map —
-//   zones are always fetched on demand via htmx, never pre-loaded.
-templ ZonesPage(accounts []model.Account, data PageData) {
+// WHY per-account grouping (not a flat list):
+//   Export and Import operations require both zone ID (for browser automation)
+//   and account ID (for the browser session credential lookup). Grouping by
+//   account makes the ownership relationship explicit and co-locates all the
+//   information needed to construct the Export link.
+templ ZonesPage(accounts []model.Account, zonesByAccount map[string][]model.Zone, data PageData) {
 	@Layout(data) {
 		<div class="page-header">
 			<h2>Zones</h2>
-			<p class="text-muted">Click "Load Zones" to fetch live zone data from dns.he.net. Zone add/remove requires the REST API.</p>
+			<p class="text-muted">
+				Zones are loaded via the <a href="/admin/accounts">Accounts page</a>.
+				Export and import BIND zone files here (requires a dns.he.net browser session).
+			</p>
 		</div>
-		for _, acc := range accounts {
-			<div class="card" style="margin-bottom:1rem;">
-				<div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;">
-					<h3 style="margin:0;">{ acc.ID } <span class="text-muted">({ acc.Username })</span></h3>
-					<button
-						class="btn btn-primary btn-sm"
-						hx-get={ "/admin/zones/" + acc.ID + "/refresh" }
-						hx-target={ "#zones-" + acc.ID }
-						hx-swap="innerHTML"
-						hx-indicator={ "#zones-spinner-" + acc.ID }>
-						Load Zones
-					</button>
-					<span id={ "zones-spinner-" + acc.ID } class="htmx-indicator text-muted">Loading...</span>
-				</div>
-				<div id={ "zones-" + acc.ID }>
-					<p class="text-muted">Click "Load Zones" to fetch zones from dns.he.net (requires browser session).</p>
-				</div>
+		if len(accounts) == 0 {
+			<div class="card">
+				<p class="text-muted">No accounts registered. <a href="/admin/accounts">Go to Accounts</a> to register an account.</p>
 			</div>
+		}
+		for _, acc := range accounts {
+			@ZonesForAccount(acc.ID, acc.Username, zonesByAccount[acc.ID])
 		}
 	}
 }
 
-// ZonesForAccount renders the zones table for one account as an htmx partial.
-// Returned by GET /admin/zones/{accountID}/refresh and inserted into #zones-{accountID}.
+// ZonesForAccount renders a zone card for one account showing zones from DB.
+// Used only in ZonesPage for full-page render (not an htmx partial — load-zones
+// returns AccountZonesList, not this template).
 //
-// WHY per-zone Export link and Import <details> panel:
-//   Export is a plain anchor with download attribute — a single click fetches
-//   the BIND file and prompts Save As. No JS required.
-//   Import uses <details>/<summary> for a collapsible inline form — native HTML,
-//   no JS, stays visible in context of the zone list without navigating away.
-templ ZonesForAccount(accountID string, zones []model.Zone) {
-	if len(zones) == 0 {
-		<p class="text-muted">No zones found for this account.</p>
-	} else {
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Zone ID</th>
-					<th>Name</th>
-					<th>Actions</th>
-				</tr>
-			</thead>
-			<tbody>
-				for _, z := range zones {
+// WHY show Export/Import only when he_zone_id is known (z.ID != ""):
+//   Export and Import use the HE numeric zone ID in the URL and in browser automation.
+//   A zone with an empty he_zone_id was manually registered or loaded before migration 005;
+//   its zone ID is unknown until the operator clicks "Load zones from HE" on the Accounts page.
+templ ZonesForAccount(accountID string, username string, zones []model.Zone) {
+	<div class="card" style="margin-bottom:1rem;">
+		<h3>{ accountID } <span class="text-muted" style="font-size:0.9em;">({ username })</span></h3>
+		if len(zones) == 0 {
+			<p class="text-muted">No zones loaded for this account. Use the <a href="/admin/accounts">Accounts page</a> to load zones from dns.he.net.</p>
+		} else {
+			<table class="data-table">
+				<thead>
 					<tr>
-						<td><code>{ z.ID }</code></td>
-						<td>{ z.Name }</td>
-						<td>
-							<div style="display:flex;gap:0.5rem;align-items:flex-start;flex-wrap:wrap;">
-								<a
-									href={ templ.SafeURL("/admin/zones/" + z.ID + "/export?account_id=" + accountID) }
-									class="btn btn-sm"
-									download={ z.Name + ".zone" }>
-									Export BIND
-								</a>
-								<details>
-									<summary class="btn btn-sm" style="cursor:pointer;list-style:none;display:inline-block;">Import BIND</summary>
-									@ZoneImportForm(accountID, z.ID, z.Name)
-								</details>
-							</div>
-							<div id={ "import-result-" + z.ID }></div>
-						</td>
+						<th>Zone Name</th>
+						<th>HE Zone ID</th>
+						<th>Actions</th>
 					</tr>
-				}
-			</tbody>
-		</table>
-	}
+				</thead>
+				<tbody>
+					for _, z := range zones {
+						<tr>
+							<td>{ z.Name }</td>
+							<td>
+								if z.ID != "" {
+									<code>{ z.ID }</code>
+								} else {
+									<span class="text-muted">Not loaded</span>
+								}
+							</td>
+							<td>
+								if z.ID != "" {
+									<div style="display:flex;gap:0.5rem;align-items:flex-start;flex-wrap:wrap;">
+										<a
+											href={ templ.SafeURL("/admin/zones/" + z.ID + "/export?account_id=" + accountID) }
+											class="btn btn-sm"
+											download={ z.Name + ".zone" }>
+											Export BIND
+										</a>
+										<details>
+											<summary class="btn btn-sm" style="cursor:pointer;list-style:none;display:inline-block;">Import BIND</summary>
+											@ZoneImportForm(accountID, z.ID, z.Name)
+										</details>
+									</div>
+									<div id={ "import-result-" + z.ID }></div>
+								} else {
+									<span class="text-muted">Load zones first (Accounts page)</span>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
 }
 
 // ZoneImportForm renders the BIND import textarea and submit button for a single zone.
@@ -131,7 +137,6 @@ templ ZoneImportForm(accountID, zoneID, zoneName string) {
 // WHY show a skipped records table (not just a count):
 //   CONTEXT.md decision: the import response must list which records were skipped
 //   and why (unsupported type, SOA, parse error) so operators know what was omitted.
-//   This matches the dry-run-style report format specified in CONTEXT.md.
 templ ZoneImportResult(zoneName string, dryRun bool, applied int, skipped []bindio.SkippedRecord, hadErrors bool) {
 	<div style="margin-top:0.75rem;padding:0.75rem;border:1px solid var(--border);border-radius:0.5rem;">
 		if hadErrors {

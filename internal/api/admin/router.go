@@ -98,10 +98,17 @@ func RegisterAdminRoutes(
 				http.Redirect(w, r, "/admin/accounts", http.StatusFound)
 			})
 
-			// Account management pages (handlers replaced by plan 03).
+			// Account management pages.
+			// load-zones: fetches zones from dns.he.net via browser session, upserts to DB,
+			//   returns AccountZonesList partial for htmx insertion into the account card.
+			// zones/{zoneName}: removes a single zone from the DB (not from dns.he.net).
+			//   {zoneName} captures the full domain name including dots (chi routes by segment,
+			//   and dots within a segment are captured without special handling).
 			r.Get("/accounts", handleAccountsPage(db))
 			r.Post("/accounts", handleAccountCreate(db))
 			r.Delete("/accounts/{accountID}", handleAccountDelete(db, sm))
+			r.Get("/accounts/{accountID}/load-zones", handleAccountLoadZones(db, sm, breakers))
+			r.Delete("/accounts/{accountID}/zones/{zoneName}", handleAccountZoneRemove(db))
 
 			// Token management pages (handlers replaced by plan 03).
 			r.Get("/tokens", handleTokensPage(db))
@@ -109,13 +116,14 @@ func RegisterAdminRoutes(
 			r.Post("/tokens/{accountID}", handleTokenIssue(db, jwtSecret))
 			r.Delete("/tokens/{tokenID}", handleTokenRevoke(db))
 
-			// Zones view: page + on-demand refresh + BIND export/import per zone.
-			// WHY separate routes for accountID vs zoneID (both use {id} path param):
-			//   /zones/{accountID}/refresh fetches the zone list for one account via browser session.
-			//   /zones/{zoneID}/export and /zones/{zoneID}/import operate on a specific zone.
-			//   Chi routes by path pattern so these three are distinct despite the same wildcard position.
+			// Zones page: shows zones from DB with per-zone Export BIND / Import BIND actions.
+			// export and import routes use the numeric HE zone ID (not the zone name) so
+			// the browser session can navigate to the correct zone page on dns.he.net.
+			// WHY {zoneID}/export and {zoneID}/import (not under /accounts/...):
+			//   These operations work on a single zone regardless of which account owns it.
+			//   The account_id is passed as a query param (export) or form field (import)
+			//   because both the zone ID and account ID are known from the Zones page card.
 			r.Get("/zones", handleZonesPage(db))
-			r.Get("/zones/{accountID}/refresh", handleZonesRefresh(sm, breakers))
 			r.Get("/zones/{zoneID}/export", handleAdminZoneExport(sm, breakers))
 			r.Post("/zones/{zoneID}/import", handleAdminZoneImport(sm, breakers))
 
@@ -196,7 +204,12 @@ func handleLogout() http.HandlerFunc {
 //   The admin UI follows the same pattern — direct DB access, no HTTP round-trips to /api/v1.
 func listAccountsFromDB(r *http.Request, db *sql.DB) ([]model.Account, error) {
 	rows, err := db.QueryContext(r.Context(),
-		`SELECT id, username, created_at, updated_at FROM accounts ORDER BY created_at ASC`,
+		// WHY include password in SELECT:
+		//   model.Account.Password has json:"-" so it never leaks into API responses.
+		//   The admin UI handler needs it to populate the struct for any display or
+		//   credential-update operations. Omitting it here would require a separate
+		//   query whenever the password is needed.
+		`SELECT id, username, password, created_at, updated_at FROM accounts ORDER BY created_at ASC`,
 	)
 	if err != nil {
 		return nil, err
@@ -206,7 +219,7 @@ func listAccountsFromDB(r *http.Request, db *sql.DB) ([]model.Account, error) {
 	var accounts []model.Account
 	for rows.Next() {
 		var acc model.Account
-		if err := rows.Scan(&acc.ID, &acc.Username, &acc.CreatedAt, &acc.UpdatedAt); err != nil {
+		if err := rows.Scan(&acc.ID, &acc.Username, &acc.Password, &acc.CreatedAt, &acc.UpdatedAt); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, acc)
@@ -220,6 +233,42 @@ func listAccountsFromDB(r *http.Request, db *sql.DB) ([]model.Account, error) {
 	return accounts, nil
 }
 
+// listZonesFromDB returns all zones for one account from the DB ordered by name.
+// Zone.ID is he_zone_id (the numeric ID assigned by dns.he.net); may be "" for
+// zones that were manually registered before a "Load zones from HE" was run.
+//
+// WHY read from zones table (not live-fetch from dns.he.net):
+//   Live-fetching requires a browser session. The DB cache is populated by
+//   handleAccountLoadZones (GET /admin/accounts/{accountID}/load-zones) which
+//   operators trigger explicitly. Reads here are cheap, instant, and session-free.
+func listZonesFromDB(ctx context.Context, db *sql.DB, accountID string) ([]model.Zone, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT name, he_zone_id FROM zones WHERE account_id = ? ORDER BY name ASC`,
+		accountID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var zones []model.Zone
+	for rows.Next() {
+		var z model.Zone
+		z.AccountID = accountID
+		if err := rows.Scan(&z.Name, &z.ID); err != nil {
+			return nil, err
+		}
+		zones = append(zones, z)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if zones == nil {
+		zones = []model.Zone{}
+	}
+	return zones, nil
+}
+
 func handleAccountsPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accounts, err := listAccountsFromDB(r, db)
@@ -227,9 +276,22 @@ func handleAccountsPage(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
 			return
 		}
+
+		// Pre-load zones from DB for each account so the page renders without
+		// browser sessions. Zones are populated by "Load zones from HE" button.
+		zonesByAccount := make(map[string][]model.Zone)
+		for _, acc := range accounts {
+			zones, err := listZonesFromDB(r.Context(), db, acc.ID)
+			if err != nil {
+				http.Error(w, "Failed to list zones", http.StatusInternalServerError)
+				return
+			}
+			zonesByAccount[acc.ID] = zones
+		}
+
 		data := templates.PageData{Title: "Accounts", ActivePage: "accounts"}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = templates.AccountsPage(accounts, data).Render(r.Context(), w)
+		_ = templates.AccountsPage(accounts, zonesByAccount, data).Render(r.Context(), w)
 	}
 }
 
@@ -266,25 +328,30 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 		}
 		accountID := strings.TrimSpace(r.FormValue("account_id"))
 		username := strings.TrimSpace(r.FormValue("username"))
+		// WHY not trimming password: leading/trailing spaces in passwords are intentional.
+		// Trimming would silently store a different credential than what the operator typed.
+		password := r.FormValue("password")
 		if accountID == "" || username == "" {
 			writeFormError("Account ID and username are both required.")
 			return
 		}
+		if password == "" {
+			writeFormError("Password is required.")
+			return
+		}
 
+		// SECURITY (SEC-03): password is never logged — only the accountID appears in errors.
 		_, err := db.ExecContext(r.Context(),
-			`INSERT INTO accounts (id, username) VALUES (?, ?)`,
-			accountID, username,
+			`INSERT INTO accounts (id, username, password) VALUES (?, ?, ?)`,
+			accountID, username, password,
 		)
 		if err != nil {
 			errStr := err.Error()
-			// Provide human-readable messages for the two most common constraint violations.
-			// The SQLite error string contains the constraint name on UNIQUE/PRIMARY KEY failures.
+			// Provide human-readable messages for the most common constraint violation.
+			// username no longer has a UNIQUE constraint (removed in migration 004) —
+			// only the PRIMARY KEY (id) can cause a UNIQUE/PK conflict here.
 			if strings.Contains(errStr, "UNIQUE") || strings.Contains(errStr, "PRIMARY KEY") {
-				if strings.Contains(errStr, "accounts.username") {
-					writeFormError(fmt.Sprintf("Username %q is already registered under a different account.", username))
-				} else {
-					writeFormError(fmt.Sprintf("Account ID %q is already registered.", accountID))
-				}
+				writeFormError(fmt.Sprintf("Account ID %q is already registered.", accountID))
 			} else {
 				writeFormError("Failed to create account: " + errStr)
 			}
@@ -302,8 +369,8 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// AccountRegisterSuccess returns the new row (appended to tbody) plus OOB clear
-		// of #account-register-error in case a previous error message was showing.
+		// AccountRegisterSuccess returns the new AccountCard (appended to #accounts-cards)
+		// plus OOB clear of #account-register-error for any prior error message.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.AccountRegisterSuccess(acc).Render(r.Context(), w)
 	}
@@ -433,18 +500,14 @@ func handleTokenRevoke(db *sql.DB) http.HandlerFunc {
 }
 
 
-// handleZonesPage renders the read-only zones view (GET /admin/zones).
+// handleZonesPage renders the zones view showing all zones from DB (GET /admin/zones).
+// Zones come from the DB (populated by "Load zones from HE" on the Accounts page).
+// This page is for BIND export/import operations — it does not trigger browser sessions.
 //
-// WHY read-only and no browser session (not scraping live zone data):
-//   Fetching zones requires browser automation per account — a Playwright session
-//   must log in and scrape the zone list. Triggering this on every page load is
-//   too expensive for a simple informational page. Instead, we show accounts and
-//   direct operators to use GET /api/v1/zones for live zone data.
-//   (CONTEXT.md deferred: zone CRUD via UI is out of scope for this phase)
-//
-// WHY store.ListAccounts is NOT used:
-//   The store package only provides Open() for DB initialization. Account CRUD
-//   uses direct DB queries — same pattern as REST handlers (see listAccountsFromDB).
+// WHY read from DB (not live-fetch):
+//   "Load zones from HE" on the Accounts page writes zones to the DB. This page
+//   reads that cache. Export/Import actions (per-zone) do use browser sessions, but
+//   only when the operator explicitly triggers them — not on page load.
 func handleZonesPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accounts, err := listAccountsFromDB(r, db)
@@ -452,11 +515,20 @@ func handleZonesPage(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
 			return
 		}
-		// Zones page shows accounts with per-account "Load Zones" htmx buttons.
-		// No browser sessions here — zones are fetched on demand via GET /zones/{accountID}/refresh.
+
+		zonesByAccount := make(map[string][]model.Zone)
+		for _, acc := range accounts {
+			zones, err := listZonesFromDB(r.Context(), db, acc.ID)
+			if err != nil {
+				http.Error(w, "Failed to list zones", http.StatusInternalServerError)
+				return
+			}
+			zonesByAccount[acc.ID] = zones
+		}
+
 		data := templates.PageData{Title: "Zones", ActivePage: "zones"}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = templates.ZonesPage(accounts, data).Render(r.Context(), w)
+		_ = templates.ZonesPage(accounts, zonesByAccount, data).Render(r.Context(), w)
 	}
 }
 
@@ -623,35 +695,95 @@ func handleSyncTrigger(db *sql.DB, sm *browser.SessionManager, breakers *resilie
 	}
 }
 
-// handleZonesRefresh fetches the live zone list for one account via browser session
-// and returns the ZonesForAccount htmx partial (GET /admin/zones/{accountID}/refresh).
+// handleAccountLoadZones fetches the live zone list for one account via browser session,
+// upserts the results into the zones DB table, then returns the AccountZonesList htmx partial
+// (GET /admin/accounts/{accountID}/load-zones).
 //
-// WHY browser session per request (not cached in DB):
-//   Zone data is not stored in SQLite — it lives only on dns.he.net. Each Load Zones
-//   click triggers a fresh Playwright scrape so operators always see current state.
-//   Caching would require a separate sync job and invalidation logic; on-demand is simpler.
-func handleZonesRefresh(sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
+// WHY upsert to DB after fetching (not just return live data):
+//   Persisting zones in DB lets handleAccountsPage and handleZonesPage serve the Accounts
+//   and Zones pages without browser sessions on every load. The DB acts as a cache that is
+//   refreshed on demand by this handler. he_zone_id is preserved across refreshes via
+//   ON CONFLICT DO UPDATE, so export/import links remain valid after re-loading.
+//
+// WHY return AccountZonesList (not ZonesForAccount):
+//   This handler is triggered from the Accounts page card — it replaces the zones sub-list
+//   inside the account card. ZonesForAccount is used by the Zones page, which has a
+//   different layout (account header + zones table in one card). AccountZonesList renders
+//   only the zones table (or empty state) without the account header.
+func handleAccountLoadZones(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accountID := chi.URLParam(r, "accountID")
 
-		var zones []model.Zone
+		var fetched []model.Zone
 		err := breakers.Execute(r.Context(), accountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
 				return sm.WithAccount(ctx, accountID, "list_zones", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 					var err error
-					zones, err = zl.ListZones()
+					fetched, err = zl.ListZones()
 					return err
 				})
 			})
 		})
 		if err != nil {
-			http.Error(w, "Failed to load zones: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to load zones from dns.he.net: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Upsert fetched zones into the DB.
+		// ON CONFLICT(account_id, name): PRIMARY KEY is (account_id, name).
+		// We update he_zone_id so that previously-empty entries get their numeric ID populated.
+		for _, z := range fetched {
+			if _, err := db.ExecContext(r.Context(),
+				`INSERT INTO zones (account_id, name, he_zone_id) VALUES (?, ?, ?)
+				 ON CONFLICT(account_id, name) DO UPDATE SET he_zone_id = excluded.he_zone_id`,
+				accountID, z.Name, z.ID,
+			); err != nil {
+				http.Error(w, "Failed to save zones: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		// Return zones from DB (authoritative after upsert) — not the raw fetched slice.
+		// Reading from DB ensures the response reflects the persisted state.
+		zones, err := listZonesFromDB(r.Context(), db, accountID)
+		if err != nil {
+			http.Error(w, "Failed to list zones: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = templates.ZonesForAccount(accountID, zones).Render(r.Context(), w)
+		_ = templates.AccountZonesList(accountID, zones).Render(r.Context(), w)
+	}
+}
+
+// handleAccountZoneRemove removes a zone from the DB for one account
+// (DELETE /admin/accounts/{accountID}/zones/{zoneName}).
+//
+// WHY remove from DB only (not from dns.he.net):
+//   Removing a zone on dns.he.net is a destructive DNS operation that should
+//   require a separate, explicit confirmation workflow. The DB entry is just the
+//   local cache — removing it hides the zone from the Accounts and Zones pages
+//   without touching the live DNS zone. The operator can re-add it by clicking
+//   "Load zones from HE" again.
+//
+// WHY return empty 200 (not 204):
+//   htmx hx-target="closest tr" + hx-swap="outerHTML" replaces the row element
+//   with the response body. Empty 200 body makes htmx replace the row with nothing,
+//   effectively removing the row from the DOM. 204 also works but 200 is consistent
+//   with other htmx row-removal patterns in this file.
+func handleAccountZoneRemove(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		accountID := chi.URLParam(r, "accountID")
+		zoneName := chi.URLParam(r, "zoneName")
+		if _, err := db.ExecContext(r.Context(),
+			`DELETE FROM zones WHERE account_id = ? AND name = ?`,
+			accountID, zoneName,
+		); err != nil {
+			http.Error(w, "Failed to remove zone", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 	}
 }
 

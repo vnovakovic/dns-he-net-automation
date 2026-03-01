@@ -10,9 +10,22 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "github.com/vnovakov/dns-he-net-automation/internal/model"
 
-// AccountsPage renders the accounts management page.
-// htmx handles inline row removal and new-account form without full page reloads.
-func AccountsPage(accounts []model.Account, data PageData) templ.Component {
+// AccountsPage renders the full accounts management page.
+// Each account is a card with nested zones loaded from the DB.
+//
+// WHY cards instead of a flat table:
+//
+//	Account now carries credentials (username + password) and owns a list of zones.
+//	A card layout makes the account→zones hierarchy visually explicit. A flat table
+//	cannot show nested zones without additional disclosure widgets.
+//
+// WHY zonesByAccount pre-populated from DB (not live-fetched on page load):
+//
+//	Live-fetching requires a Playwright browser session per account — too expensive
+//	for a page load. Zones are stored in the DB after "Load zones from HE" and
+//	served directly. The "Load zones from HE" button triggers a browser session
+//	only when the operator explicitly requests it.
+func AccountsPage(accounts []model.Account, zonesByAccount map[string][]model.Zone, data PageData) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -45,17 +58,17 @@ func AccountsPage(accounts []model.Account, data PageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-header\"><h2>Accounts</h2></div><div class=\"card\"><table id=\"accounts-table\" class=\"data-table\"><thead><tr><th>ID</th><th>Username</th><th>Created</th><th>Actions</th></tr></thead> <tbody>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-header\"><h2>Accounts</h2><p class=\"text-muted\">Each account stores dns.he.net credentials. Zones are fetched on demand and cached here for use by the API.</p></div><div id=\"accounts-cards\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, acc := range accounts {
-				templ_7745c5c3_Err = AccountRow(acc).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = AccountCard(acc, zonesByAccount[acc.ID]).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</tbody></table></div><div class=\"card\" style=\"margin-top:1rem;\"><h3>Register Account</h3><p class=\"text-muted\">Account ID is an internal identifier (e.g. \"primary\"). It does not need to match a domain name.</p><div id=\"account-register-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/accounts\" hx-target=\"#accounts-table tbody\" hx-swap=\"beforeend\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"account_id\">Account ID</label> <input type=\"text\" id=\"account_id\" name=\"account_id\" placeholder=\"e.g. primary\" required></div><div class=\"form-group\"><label for=\"username\">HE Username</label> <input type=\"text\" id=\"username\" name=\"username\" placeholder=\"your@email.com\" required></div><button type=\"submit\" class=\"btn btn-primary\">Register</button></div></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div class=\"card\" style=\"margin-top:1rem;\"><h3>Register Account</h3><p class=\"text-muted\">Account ID is an internal label (e.g. \"primary\"). Username and password are your dns.he.net login credentials.</p><div id=\"account-register-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/accounts\" hx-target=\"#accounts-cards\" hx-swap=\"beforeend\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"account_id\">Account ID</label> <input type=\"text\" id=\"account_id\" name=\"account_id\" placeholder=\"e.g. primary\" required></div><div class=\"form-group\"><label for=\"username\">HE Username</label> <input type=\"text\" id=\"username\" name=\"username\" placeholder=\"your@email.com\" required></div><div class=\"form-group\"><label for=\"password\">HE Password</label> <input type=\"password\" id=\"password\" name=\"password\" placeholder=\"dns.he.net password\" required></div><button type=\"submit\" class=\"btn btn-primary\">Register</button></div></form></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -69,9 +82,23 @@ func AccountsPage(accounts []model.Account, data PageData) templ.Component {
 	})
 }
 
-// AccountRow renders a single account table row.
-// Used both for full-page render and as htmx response for new account creation.
-func AccountRow(acc model.Account) templ.Component {
+// AccountCard renders a single account as a card with nested zones.
+// Used for full-page render inside AccountsPage and as the htmx partial
+// returned on successful account registration (appended to #accounts-cards).
+//
+// WHY hx-target="closest .card" for Remove (not a CSS id selector):
+//
+//	Account IDs may contain dots (e.g. "eyodwa.org"), which are valid in HTML id
+//	attributes but break CSS id selectors — "#account-eyodwa.org" is parsed as
+//	"element with id=account-eyodwa AND class=org". Using "closest .card" avoids
+//	this by targeting the nearest ancestor .card element without any id dependency.
+//
+// WHY sanitizeHTMLID for the zones container id/hx-target:
+//
+//	Same dot-in-CSS-selector issue. The zones div id uses sanitized ID ("eyodwa-org")
+//	so that "#account-zones-eyodwa-org" is a valid CSS selector. The original
+//	account ID (with dots) is still used for all URL paths and DB queries.
+func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -92,98 +119,145 @@ func AccountRow(acc model.Account) templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<tr id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"card\" style=\"margin-bottom:1rem;\"><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;\"><div><h3 style=\"margin:0;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs("account-row-" + acc.ID)
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(acc.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 57, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 76, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"><td><code>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, " <span class=\"text-muted\" style=\"font-size:0.9em;\">(")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(acc.ID)
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(acc.Username)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 58, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 76, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</code></td><td>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, ")</span></h3><small class=\"text-muted\">Registered ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(acc.Username)
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(acc.CreatedAt.Format("2006-01-02"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 59, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 77, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</td><td>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</small></div><div style=\"display:flex;gap:0.5rem;align-items:center;\"><button class=\"btn btn-primary btn-sm\" hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(acc.CreatedAt.Format("2006-01-02 15:04"))
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/accounts/" + acc.ID + "/load-zones")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 60, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 82, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</td><td><button class=\"btn btn-danger btn-sm\" hx-delete=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" hx-target=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/accounts/" + acc.ID)
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs("#account-zones-" + sanitizeHTMLID(acc.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 64, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 83, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" hx-target=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" hx-swap=\"innerHTML\" hx-indicator=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var9 string
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs("#account-row-" + acc.ID)
+		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs("#zones-spinner-" + sanitizeHTMLID(acc.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 65, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 85, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" hx-swap=\"outerHTML swap:500ms\" hx-confirm=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\">Load zones from HE</button> <span id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var10 string
-		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs("Remove account '" + acc.ID + "' and all its tokens?")
+		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs("zones-spinner-" + sanitizeHTMLID(acc.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 67, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 88, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\">Remove</button></td></tr>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" class=\"htmx-indicator text-muted\">Loading...</span> <button class=\"btn btn-danger btn-sm\" hx-delete=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var11 string
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/accounts/" + acc.ID)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 91, Col: 44}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" hx-target=\"closest .card\" hx-swap=\"outerHTML swap:500ms\" hx-confirm=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var12 string
+		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs("Remove account '" + acc.ID + "' and all its zones and tokens?")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 94, Col: 81}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\">Remove</button></div></div><div id=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var13 string
+		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs("account-zones-" + sanitizeHTMLID(acc.ID))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 99, Col: 53}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = AccountZonesList(acc.ID, zones).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -191,13 +265,134 @@ func AccountRow(acc model.Account) templ.Component {
 	})
 }
 
+// AccountZonesList renders the zones sub-list for one account.
+// Used on page load (from DB via AccountCard) and as the htmx partial
+// returned by GET /admin/accounts/{accountID}/load-zones.
+//
+// WHY hx-target="closest tr" for Remove zone (not a CSS id selector):
+//
+//	Zone names can contain dots (same dot-in-CSS issue as account IDs).
+//	"closest tr" targets the enclosing table row without any id dependency.
+func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var14 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var14 == nil {
+			templ_7745c5c3_Var14 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		if len(zones) == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<p class=\"text-muted\" style=\"margin:0;\">No zones loaded. Click \"Load zones from HE\" to fetch the zone list from dns.he.net.</p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<table class=\"data-table\"><thead><tr><th>Zone Name</th><th>HE Zone ID</th><th>Actions</th></tr></thead> <tbody>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, z := range zones {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<tr><td>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var15 string
+				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(z.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 127, Col: 18}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</td><td>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if z.ID != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<code>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var16 string
+					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(z.ID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 130, Col: 20}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</code>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span class=\"text-muted\">—</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</td><td><button class=\"btn btn-danger btn-sm\" hx-delete=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var17 string
+				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/accounts/" + accountID + "/zones/" + z.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 138, Col: 71}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML swap:500ms\" hx-confirm=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var18 string
+				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs("Remove zone '" + z.Name + "' from account '" + accountID + "'?")
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 141, Col: 85}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\">Remove</button></td></tr>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</tbody></table>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		return nil
+	})
+}
+
 // AccountRegisterSuccess is the htmx partial returned on successful account registration.
-// Returns the new AccountRow (appended to tbody by htmx) and clears the error div OOB.
+// Appended to #accounts-cards by htmx and clears the error div via OOB swap.
 //
-// WHY hx-swap-oob on the error div:
+// WHY hx-swap-oob on error div:
 //
-//	If a previous failed registration left an error message in #account-register-error,
-//	this OOB swap replaces it with an empty div, clearing the error without a page reload.
+//	If a previous failed registration left an error in #account-register-error,
+//	this OOB swap replaces it with an empty div without a page reload.
 func AccountRegisterSuccess(acc model.Account) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -214,16 +409,16 @@ func AccountRegisterSuccess(acc model.Account) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var11 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var11 == nil {
-			templ_7745c5c3_Var11 = templ.NopComponent
+		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var19 == nil {
+			templ_7745c5c3_Var19 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = AccountRow(acc).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = AccountCard(acc, nil).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div id=\"account-register-error\" hx-swap-oob=\"true\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div id=\"account-register-error\" hx-swap-oob=\"true\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -232,8 +427,13 @@ func AccountRegisterSuccess(acc model.Account) templ.Component {
 }
 
 // AccountRegisterError renders an error message for #account-register-error.
-// Delivered via HX-Retarget header when registration fails, so the error appears
-// in the form card instead of being silently swallowed by htmx.
+// Delivered via HX-Retarget header when registration fails — see handleAccountCreate.
+//
+// WHY HX-Retarget (not http.Error):
+//
+//	http.Error returns 4xx/5xx which htmx swallows silently — the form resets but
+//	no error is shown. Retargeting to the error div with status 200 makes htmx
+//	actually perform the swap and the error becomes visible to the operator.
 func AccountRegisterError(msg string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -250,25 +450,25 @@ func AccountRegisterError(msg string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var12 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var12 == nil {
-			templ_7745c5c3_Var12 = templ.NopComponent
+		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var20 == nil {
+			templ_7745c5c3_Var20 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<p class=\"error-banner\" style=\"margin:0;\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<p class=\"error-banner\" style=\"margin:0;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var13 string
-		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
+		var templ_7745c5c3_Var21 string
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 89, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 171, Col: 48}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
