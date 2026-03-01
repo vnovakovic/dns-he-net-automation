@@ -108,6 +108,7 @@ func RegisterAdminRoutes(
 			r.Post("/accounts", handleAccountCreate(db))
 			r.Delete("/accounts/{accountID}", handleAccountDelete(db, sm))
 			r.Get("/accounts/{accountID}/load-zones", handleAccountLoadZones(db, sm, breakers))
+			r.Post("/accounts/{accountID}/zones", handleAccountZoneAdd(db))
 			r.Delete("/accounts/{accountID}/zones/{zoneName}", handleAccountZoneRemove(db))
 
 			// Token management pages (handlers replaced by plan 03).
@@ -752,6 +753,79 @@ func handleAccountLoadZones(db *sql.DB, sm *browser.SessionManager, breakers *re
 			return
 		}
 
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.AccountZonesList(accountID, zones).Render(r.Context(), w)
+	}
+}
+
+// handleAccountZoneAdd registers a zone under an account in the DB
+// (POST /admin/accounts/{accountID}/zones).
+//
+// WHY manual zone add (not only "Load zones from HE"):
+//   An operator may want to register a single specific zone without triggering
+//   a full browser session that scrapes all zones from dns.he.net. This handler
+//   lets them type the zone name (and optionally the HE numeric zone ID) directly.
+//   If he_zone_id is left empty, Export/Import on the Zones page are disabled
+//   until the operator either enters the ID manually or runs "Load zones from HE".
+//
+// WHY ON CONFLICT DO UPDATE:
+//   Re-submitting the same zone name is idempotent. If the zone already exists and
+//   the operator provides a non-empty he_zone_id, the ID is updated. If empty,
+//   the existing he_zone_id is preserved (CASE WHEN prevents overwriting with empty).
+//
+// WHY writeZoneError (not http.Error):
+//   http.Error returns 500 which htmx swallows silently — the zones list stays
+//   unchanged and no feedback appears. writeZoneError retargets to the per-account
+//   error div via HX-Retarget + status 200 so htmx actually swaps the error in.
+func handleAccountZoneAdd(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		accountID := chi.URLParam(r, "accountID")
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+
+		// account_id_safe is the sanitized (dot-free) account ID computed in the template,
+		// passed as a hidden field so we can build the correct HX-Retarget CSS selector
+		// without duplicating the sanitization logic in Go.
+		accountIDSafe := r.FormValue("account_id_safe")
+		zoneName := strings.TrimSpace(r.FormValue("zone_name"))
+		heZoneID := strings.TrimSpace(r.FormValue("he_zone_id"))
+
+		writeZoneError := func(msg string) {
+			w.Header().Set("HX-Retarget", "#zone-add-error-"+accountIDSafe)
+			w.Header().Set("HX-Reswap", "innerHTML")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			// Inline error HTML — no separate template needed for a one-liner.
+			_, _ = fmt.Fprintf(w, `<p class="error-banner" style="margin:0;">%s</p>`, msg)
+		}
+
+		if zoneName == "" {
+			writeZoneError("Zone name is required.")
+			return
+		}
+
+		_, err := db.ExecContext(r.Context(),
+			// CASE WHEN: preserve the existing he_zone_id if the new value is empty.
+			// This prevents overwriting a known zone ID with an empty string when the
+			// operator re-registers a zone they already loaded from HE.
+			`INSERT INTO zones (account_id, name, he_zone_id) VALUES (?, ?, ?)
+			 ON CONFLICT(account_id, name) DO UPDATE
+			 SET he_zone_id = CASE WHEN excluded.he_zone_id != '' THEN excluded.he_zone_id ELSE he_zone_id END`,
+			accountID, zoneName, heZoneID,
+		)
+		if err != nil {
+			writeZoneError("Failed to add zone: " + err.Error())
+			return
+		}
+
+		zones, err := listZonesFromDB(r.Context(), db, accountID)
+		if err != nil {
+			writeZoneError("Zone saved but failed to reload list — refresh the page.")
+			return
+		}
+
+		// Clear the error div OOB in case a previous error was showing.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.AccountZonesList(accountID, zones).Render(r.Context(), w)
 	}
