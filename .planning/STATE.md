@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 6 of 6 (BIND Import/Export + Admin UI)
-Plan: 3 of 4 in phase 6 (06-03 complete — accounts/tokens admin UI: accounts.templ + tokens.templ + 7 handler stubs replaced + token.RevokeByJTI)
-Status: In Progress
-Last activity: 2026-02-28 -- Plan 06-03 complete: accounts management page (htmx inline register/remove), tokens management page (lazy-load per account, issue with shown-once JWT, JTI-only revoke), all 7 account/token stub handlers replaced
+Plan: 4 of 4 in phase 6 (06-04 complete — zones/sync/audit admin UI: zones.templ + sync.templ + audit.templ + all 4 stub handlers replaced + fs.Sub static asset fix)
+Status: Complete
+Last activity: 2026-03-01 -- Plan 06-04 complete: zones read-only view, htmx sync trigger with dry-run diff table, paginated audit log, static asset serving fixed via fs.Sub — Phase 6 fully complete
 
-Progress: [████████████░░░░] 75% (3/4 plans in phase 6)
+Progress: [████████████████] 100% (4/4 plans in phase 6)
 
 ## Performance Metrics
 
@@ -130,6 +130,9 @@ Recent decisions affecting current work:
 - [Phase 06]: Lazy token loading via htmx GET /admin/tokens/{accountID} — avoids N+1 queries on page load for multi-account deployments
 - [Phase 06]: handleSyncTrigger calls reconcile logic in-process — no HTTP round-trip to /api/v1/zones/{zoneID}/sync; avoids Bearer token management in admin layer
 - [Phase 06]: audit.Entry extended with ID+CreatedAt for List() scan — Write() INSERT does not use these fields, so all existing Write() callers are backward-compatible
+- [Phase 06-04]: tokenPrefix() helper avoids bare [:8] slice panic — production JTI tokens are always UUIDs but defensive code prevents panic on malformed DB rows
+- [Phase 06-04]: ZonesPage shows accounts only (empty zonesByAccount map) — browser sessions per account would be too expensive for a read-only informational page
+- [Phase 06-04]: fs.Sub re-roots embed FS at "static/" — without this, FileServer sees "admin.css" but FS root has "static/admin.css", causing 404 for all static assets
 
 ### Pending Todos
 
@@ -142,6 +145,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-28
-Stopped at: Completed 06-03-PLAN.md (accounts/tokens admin UI: accounts.templ + tokens.templ + 7 handler stubs replaced + token.RevokeByJTI)
+Last session: 2026-03-01
+Stopped at: Completed 06-04-PLAN.md — Phase 6 fully complete (zones/sync/audit admin UI, all stub handlers replaced, static assets fixed, admin UI verified end-to-end)
 Resume file: None

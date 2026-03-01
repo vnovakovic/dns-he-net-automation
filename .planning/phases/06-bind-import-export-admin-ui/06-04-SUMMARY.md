@@ -21,6 +21,7 @@ provides:
   - audit.Entry.ID + audit.Entry.CreatedAt — extended struct fields (backward-compatible)
   - All 4 plan 04 stub handlers replaced: handleZonesPage, handleSyncPage, handleSyncTrigger, handleAuditPage
   - No 501 responses remain in internal/api/admin/
+  - fs.Sub fix: embedded static assets resolve correctly after StripPrefix
 affects: []
 
 # Tech tracking
@@ -31,6 +32,7 @@ tech-stack:
     - "In-process sync from admin UI: reconcile.DiffRecords + reconcile.Apply called directly; no HTTP round-trip to /api/v1/zones/{zoneID}/sync"
     - "Defensive string slicing: tokenPrefix() helper instead of bare [:8] to prevent panic on short token IDs"
     - "audit.Entry struct extension: new ID+CreatedAt fields for List() scan; Write() unaffected (uses INSERT without reading those columns)"
+    - "fs.Sub embed pattern: embed FS roots at 'static/admin.css'; fs.Sub re-roots at 'static/' so FileServer sees 'admin.css' after StripPrefix removes '/admin/static/'"
 
 key-files:
   created:
@@ -49,25 +51,26 @@ key-decisions:
   - "audit.Entry extended with ID+CreatedAt for List() scan — Write() INSERT does not use these fields, so all existing Write() callers are backward-compatible"
   - "tokenPrefix() helper truncates token IDs safely to [:8] — bare slice panics if token shorter than 8 chars; defensive helper required"
   - "ZonesPage handler shows accounts only (no browser sessions) — scraping live zone data on page load is too expensive for an informational read-only page"
+  - "fs.Sub re-roots embed FS at 'static/' — without this, FileServer sees 'admin.css' but FS root has 'static/admin.css', causing 404 for all static assets"
 
 requirements-completed: [UI-02, UI-03, UI-04, UI-05]
 
 # Metrics
 duration: 4min
-completed: 2026-02-28
+completed: 2026-03-01
 ---
 
 # Phase 6 Plan 04: Admin Zones, Sync, and Audit UI Summary
 
-**Zones read-only view, htmx sync trigger with dry-run diff table, paginated audit log — all 4 stub handlers replaced, go build exits 0, no 501 responses remain**
+**Zones read-only view, htmx sync trigger with dry-run diff table, paginated audit log — all 4 stub handlers replaced, static assets fixed via fs.Sub, admin UI verified working end-to-end**
 
 ## Performance
 
 - **Duration:** 4 min
 - **Started:** 2026-02-28T22:52:42Z
-- **Completed:** 2026-02-28T22:56:19Z
-- **Tasks:** 1 of 2 (Task 2 is checkpoint:human-verify — awaiting user confirmation)
-- **Files modified:** 8 (6 created, 2 modified)
+- **Completed:** 2026-03-01T08:25:00Z
+- **Tasks:** 2 of 2 (Task 1 implementation + Task 2 human-verify checkpoint approved)
+- **Files modified:** 8 (6 created, 2 modified; +1 router.go fix applied outside plan)
 
 ## Accomplishments
 
@@ -77,12 +80,14 @@ completed: 2026-02-28
 - internal/audit/audit.go: Extended Entry struct with ID+CreatedAt; added List() (QueryContext ordered DESC) and Count() (QueryRowContext scalar)
 - internal/api/admin/router.go: Replaced all 4 stub 501 handlers; added imports (context, encoding/json, strconv, playwright, audit, pages, reconcile)
 - handleSyncTrigger: Full deleteFn/updateFn/createFn closure bodies mirroring internal/api/handlers/sync.go exactly
+- Admin UI verified: CSS and htmx load correctly, dark theme sidebar with #646cff accent, accounts htmx inline registration, tokens lazy load — all pages render without errors
 
 ## Task Commits
 
 Each task was committed atomically:
 
 1. **Task 1: Zones, sync, and audit templ components + handler implementations** - `6dee0a2` (feat)
+2. **Task 2: Verify admin UI end-to-end (checkpoint:human-verify)** - `d925080` (fix, applied outside plan — static assets fs.Sub fix confirmed working by user)
 
 **Plan metadata:** *(see final commit below)*
 
@@ -95,14 +100,15 @@ Each task was committed atomically:
 - `internal/api/admin/templates/audit.templ` - AuditPage paginated log with auditActionClass + tokenPrefix
 - `internal/api/admin/templates/audit_templ.go` - Templ-generated
 - `internal/audit/audit.go` - Extended Entry struct (ID, CreatedAt); added List() and Count()
-- `internal/api/admin/router.go` - Replaced 4 stub handlers; added imports for audit, pages, reconcile, playwright, json, strconv, context
+- `internal/api/admin/router.go` - Replaced 4 stub handlers; added imports for audit, pages, reconcile, playwright, json, strconv, context; fs.Sub fix for static assets
 
 ## Decisions Made
 
 - handleSyncTrigger calls reconcile logic in-process — no HTTP round-trip to /api/v1/zones/{zoneID}/sync (avoids Bearer token management in admin layer)
 - audit.Entry extended with ID+CreatedAt — these fields are DB-assigned on INSERT, so Write() is backward-compatible (doesn't set them)
-- tokenPrefix() helper avoids bare [:8] slice panic — production JTI tokens are always UUIDs but defensive code prevents panic on malformed DB rows
+- tokenPrefix() helper avoids bare [:8] slice panic — production JTI tokens are always UUIDs but a defensive helper is required for correctness
 - ZonesPage shows accounts only (empty zonesByAccount map) — browser sessions per account would be too expensive for a read-only informational page
+- fs.Sub re-roots the embedded FS at "static/" — without this, FileServer cannot find files after StripPrefix removes the /admin/static/ prefix (404 for all CSS/JS)
 
 ## Deviations from Plan
 
@@ -132,10 +138,18 @@ Each task was committed atomically:
 - **Verification:** go build ./... exits 0; function handles empty string and short strings
 - **Committed in:** 6dee0a2 (Task 1 commit)
 
+**4. [Rule 1 - Bug] Fixed embedded static file serving via fs.Sub (applied outside plan as d925080)**
+- **Found during:** Task 2 human-verify (user confirmed static files returned 404 before fix)
+- **Issue:** The embed FS roots files at `static/admin.css`. After `StripPrefix` removes `/admin/static/`, `http.FileServer` sees `admin.css` and looks for it at the FS root — resulting in 404. The fix was not part of plan 04 itself but was identified and committed during verification.
+- **Fix:** Used `fs.Sub(staticFS, "static")` to re-root the embedded FS at `static/` so `FileServer` sees `admin.css` after the prefix strip.
+- **Files modified:** internal/api/admin/router.go
+- **Verification:** User confirmed CSS and htmx loaded correctly in browser after fix
+- **Committed in:** d925080 (fix(06-02): use fs.Sub to correctly serve embedded static assets)
+
 ---
 
-**Total deviations:** 3 auto-fixed (1 Rule 1 bug, 2 Rule 2 missing critical)
-**Impact on plan:** All auto-fixes required for correctness and compile safety. No scope creep.
+**Total deviations:** 4 auto-fixed (2 Rule 1 bugs, 2 Rule 2 missing critical)
+**Impact on plan:** All auto-fixes required for correctness and compile safety. The fs.Sub fix was essential for admin UI functionality. No scope creep.
 
 ## Issues Encountered
 
@@ -147,14 +161,15 @@ None — admin UI credentials (ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_SESSION_KEY
 
 ## Next Phase Readiness
 
-- Phase 6 plan 04 implementation complete — awaiting checkpoint:human-verify (Task 2)
-- After human verification: Phase 6 is fully complete (all 4 plans done)
-- Admin UI fully functional: login, accounts, tokens, zones, sync, audit log pages all implemented
+- Phase 6 is fully complete — all 4 plans done
+- Admin UI fully functional: login, accounts, tokens, zones, sync, audit log pages all implemented and verified
 - No 501 stubs remain in internal/api/admin/
+- BIND import/export endpoints working at /api/v1/zones/{zoneID}/export and /import
+- Project is feature-complete per ROADMAP.md
 
 ## Self-Check: PASSED
 
-All files verified present on disk. Task commit verified in git log.
+All files verified present on disk. Task commits verified in git log.
 
 - internal/api/admin/templates/zones.templ: FOUND
 - internal/api/admin/templates/zones_templ.go: FOUND
@@ -163,9 +178,10 @@ All files verified present on disk. Task commit verified in git log.
 - internal/api/admin/templates/audit.templ: FOUND
 - internal/api/admin/templates/audit_templ.go: FOUND
 - internal/audit/audit.go: FOUND (extended with ID, CreatedAt, List, Count)
-- internal/api/admin/router.go: FOUND (4 stub handlers replaced)
+- internal/api/admin/router.go: FOUND (4 stub handlers replaced + fs.Sub fix)
 - Task 1 commit 6dee0a2: FOUND
+- Fix commit d925080: FOUND
 
 ---
 *Phase: 06-bind-import-export-admin-ui*
-*Completed: 2026-02-28*
+*Completed: 2026-03-01*
