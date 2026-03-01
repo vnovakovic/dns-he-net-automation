@@ -243,16 +243,31 @@ func handleAccountsPage(db *sql.DB) http.HandlerFunc {
 // WHY inline DB insert (not store.CreateAccount):
 //   The store package only provides Open(). Account CRUD mirrors the REST handler pattern:
 //   inline ExecContext + QueryRowContext for created_at (DB-assigned timestamp).
+//
+// WHY writeFormError (not http.Error):
+//   http.Error returns 4xx/5xx which htmx swallows silently — the user sees the form reset
+//   but no feedback. writeFormError retargets the response to #account-register-error via
+//   HX-Retarget + HX-Reswap headers and returns 200 so htmx actually performs the swap.
+//   This makes all error cases (duplicate ID, duplicate username, parse failure) visible.
 func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// writeFormError sends an error partial to #account-register-error via htmx retarget.
+		// Must be 200 — htmx only performs the swap on 2xx responses.
+		writeFormError := func(msg string) {
+			w.Header().Set("HX-Retarget", "#account-register-error")
+			w.Header().Set("HX-Reswap", "innerHTML")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_ = templates.AccountRegisterError(msg).Render(r.Context(), w)
+		}
+
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
+			writeFormError("Bad request: could not parse form.")
 			return
 		}
 		accountID := strings.TrimSpace(r.FormValue("account_id"))
 		username := strings.TrimSpace(r.FormValue("username"))
 		if accountID == "" || username == "" {
-			http.Error(w, "account_id and username required", http.StatusBadRequest)
+			writeFormError("Account ID and username are both required.")
 			return
 		}
 
@@ -261,7 +276,18 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 			accountID, username,
 		)
 		if err != nil {
-			http.Error(w, "Failed to create account: "+err.Error(), http.StatusInternalServerError)
+			errStr := err.Error()
+			// Provide human-readable messages for the two most common constraint violations.
+			// The SQLite error string contains the constraint name on UNIQUE/PRIMARY KEY failures.
+			if strings.Contains(errStr, "UNIQUE") || strings.Contains(errStr, "PRIMARY KEY") {
+				if strings.Contains(errStr, "accounts.username") {
+					writeFormError(fmt.Sprintf("Username %q is already registered under a different account.", username))
+				} else {
+					writeFormError(fmt.Sprintf("Account ID %q is already registered.", accountID))
+				}
+			} else {
+				writeFormError("Failed to create account: " + errStr)
+			}
 			return
 		}
 
@@ -272,13 +298,14 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 			accountID,
 		).Scan(&acc.ID, &acc.Username, &acc.CreatedAt, &acc.UpdatedAt)
 		if err != nil {
-			http.Error(w, "Failed to retrieve created account", http.StatusInternalServerError)
+			writeFormError("Account was created but could not be retrieved — reload the page.")
 			return
 		}
 
-		// Return just the new row — htmx appends it to #accounts-table tbody.
+		// AccountRegisterSuccess returns the new row (appended to tbody) plus OOB clear
+		// of #account-register-error in case a previous error message was showing.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = templates.AccountRow(acc).Render(r.Context(), w)
+		_ = templates.AccountRegisterSuccess(acc).Render(r.Context(), w)
 	}
 }
 

@@ -28,7 +28,8 @@ templ AccountsPage(accounts []model.Account, data PageData) {
 		</div>
 		<div class="card" style="margin-top:1rem;">
 			<h3>Register Account</h3>
-			<p class="text-muted">Account ID must match the Vault path for the HE credentials.</p>
+			<p class="text-muted">Account ID is an internal identifier (e.g. "primary"). It does not need to match a domain name.</p>
+			<div id="account-register-error" style="margin-bottom:0.5rem;"></div>
 			<form
 				hx-post="/admin/accounts"
 				hx-target="#accounts-table tbody"
@@ -68,4 +69,22 @@ templ AccountRow(acc model.Account) {
 			</button>
 		</td>
 	</tr>
+}
+
+// AccountRegisterSuccess is the htmx partial returned on successful account registration.
+// Returns the new AccountRow (appended to tbody by htmx) and clears the error div OOB.
+//
+// WHY hx-swap-oob on the error div:
+//   If a previous failed registration left an error message in #account-register-error,
+//   this OOB swap replaces it with an empty div, clearing the error without a page reload.
+templ AccountRegisterSuccess(acc model.Account) {
+	@AccountRow(acc)
+	<div id="account-register-error" hx-swap-oob="true"></div>
+}
+
+// AccountRegisterError renders an error message for #account-register-error.
+// Delivered via HX-Retarget header when registration fails, so the error appears
+// in the form card instead of being silently swallowed by htmx.
+templ AccountRegisterError(msg string) {
+	<p class="error-banner" style="margin:0;">{ msg }</p>
 }
