@@ -27,17 +27,20 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- user_id FK: HE accounts now belong to an Account User.
 --
--- WHY DEFAULT '' (not NOT NULL without default):
---   SQLite cannot add a NOT NULL column without a DEFAULT to an existing table.
---   DEFAULT '' means existing accounts are "admin-owned" — the admin sees them (no WHERE filter
---   on blank user_id) while account users (non-blank user_id) do not. This preserves all
---   existing accounts without data loss and without requiring a full table rebuild.
+-- WHY NULL (not DEFAULT ''):
+--   NULL means "admin-owned" — no Account User owns this account, so the server admin
+--   can see it and Account Users cannot (WHERE user_id = ? never matches NULL in SQL).
+--   SQLite allows adding a nullable column without a DEFAULT to an existing table.
+--   Previously DEFAULT '' was used but that broke FK constraint checks in tests:
+--   '' is not a valid users.id value, so PRAGMA foreign_keys = ON rejects any INSERT
+--   that leaves user_id as the empty-string default. NULL FK is always allowed (it
+--   means "no parent row"), which is correct semantics for admin-owned accounts.
 --
 -- WHY ON DELETE CASCADE:
 --   Deleting an Account User should also delete their HE accounts (and via the accounts→zones
 --   cascade, their zones too). This keeps the DB self-consistent without requiring application-
 --   level cascade logic.
-ALTER TABLE accounts ADD COLUMN user_id TEXT NOT NULL DEFAULT '' REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE accounts ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE;
 
 -- +goose Down
 

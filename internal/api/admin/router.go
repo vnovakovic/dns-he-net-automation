@@ -416,12 +416,17 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 		//   Accepting user_id from the form would allow any authenticated user to create accounts
 		//   owned by a different user ID (horizontal privilege escalation). Taking it from the
 		//   verified session context ensures the account belongs to the logged-in user.
-		//   Admin sessions return "" for user_id — admin-created accounts are "admin-owned"
-		//   (visible to admin, not visible to any account user).
+		//   Admin sessions return "" — we insert NULL for admin so FK constraint is satisfied
+		//   (NULL FK is always valid in SQL; "" would fail FK checks when foreign_keys=ON).
+		//   NULL user_id = "admin-owned": visible to admin, invisible to account users.
 		userID := getSessionUserID(r)
+		var userIDVal interface{}
+		if userID != "" {
+			userIDVal = userID
+		} // else nil → NULL in SQLite
 		_, err := db.ExecContext(r.Context(),
 			`INSERT INTO accounts (id, username, password, user_id) VALUES (?, ?, ?, ?)`,
-			accountID, username, password, userID,
+			accountID, username, password, userIDVal,
 		)
 		if err != nil {
 			errStr := err.Error()
