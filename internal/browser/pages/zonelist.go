@@ -290,7 +290,12 @@ func (zp *ZoneListPage) GetRecordRows() ([]RecordRow, error) {
 //	td[8]: DDNS key button (empty for static records)
 //	td[9]: class="dns_delete" — delete img button (ignored)
 func (zp *ZoneListPage) ParseRecordRow(rowID string) (*model.Record, error) {
-	cells := zp.page.Locator(fmt.Sprintf("tr#%s td", rowID))
+	// WHY attribute selector instead of tr#ID:
+	//   HE.net record row IDs are purely numeric (e.g. "5606222228"). CSS ID selectors
+	//   require the identifier to start with a letter or underscore — a leading digit is a
+	//   syntax error. tr#5606222228 fails with "not a valid selector" even though the HTML
+	//   id attribute is valid. Using tr[id="..."] is the correct workaround for numeric IDs.
+	cells := zp.page.Locator(fmt.Sprintf(`tr[id="%s"] td`, rowID))
 
 	count, err := cells.Count()
 	if err != nil {
