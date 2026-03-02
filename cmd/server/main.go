@@ -203,6 +203,30 @@ func main() {
 		}
 	}()
 
+	// Dedicated metrics server on MetricsPort (default 9090).
+	//
+	// WHY a separate port for /metrics (not only on the main API port):
+	//   The main port may sit behind a TLS terminator, auth proxy, or rate limiter that
+	//   blocks Prometheus scrapers. A dedicated metrics port bypasses all of that — scrapers
+	//   target :9090 directly on the internal network without credentials or TLS.
+	//   Set METRICS_PORT=0 to disable this server (metrics remain available on the main port).
+	var metricsSrv *http.Server
+	if cfg.MetricsPort > 0 {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", reg.Handler())
+		metricsSrv = &http.Server{
+			Addr:    fmt.Sprintf(":%d", cfg.MetricsPort),
+			Handler: metricsMux,
+		}
+		go func() {
+			slog.Info("metrics server listening", "port", cfg.MetricsPort)
+			if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("metrics server error", "error", err)
+				os.Exit(1)
+			}
+		}()
+	}
+
 	slog.Info("service ready, waiting for requests or shutdown signal", "port", cfg.Port)
 
 	// Block until a shutdown signal is received.
@@ -220,6 +244,13 @@ func main() {
 		slog.Error("http server shutdown error", "error", err)
 	}
 	slog.Info("http server stopped")
+
+	if metricsSrv != nil {
+		if err := metricsSrv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("metrics server shutdown error", "error", err)
+		}
+		slog.Info("metrics server stopped")
+	}
 
 	// Note: deferred sm.Close(), launcher.Close(), db.Close() run after this in LIFO order.
 	// sm was registered last (runs first), then launcher, then db (registered first, runs last).

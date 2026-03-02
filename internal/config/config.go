@@ -13,6 +13,13 @@ type Config struct {
 	// Port is the HTTP listen port (default: 8080).
 	Port int `env:"PORT" envDefault:"8080"`
 
+	// MetricsPort is the dedicated Prometheus metrics listen port (default: 9090).
+	// Serving metrics on a separate port keeps the scrape target isolated from the API:
+	// rate limiting, auth middleware, and TLS termination on the API port do not affect
+	// Prometheus scrapers. Set to 0 to disable the dedicated metrics server (metrics
+	// will still be available on the main port via /metrics).
+	MetricsPort int `env:"METRICS_PORT" envDefault:"9090"`
+
 	// DBPath is the SQLite database file path (default: dns-he-net.db).
 	DBPath string `env:"DB_PATH" envDefault:"dns-he-net.db"`
 
