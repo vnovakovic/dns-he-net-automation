@@ -17,7 +17,7 @@ func TestLoad_Defaults(t *testing.T) {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 
-	assert.Equal(t, 8080, cfg.Port)
+	assert.Equal(t, 9001, cfg.Port)
 	assert.Equal(t, "dns-he-net.db", cfg.DBPath)
 	assert.Equal(t, `[{"id":"test","username":"user","password":"pass"}]`, cfg.HEAccountsJSON)
 	assert.True(t, cfg.PlaywrightHeadless)

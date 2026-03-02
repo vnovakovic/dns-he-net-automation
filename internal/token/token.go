@@ -14,6 +14,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -94,10 +95,29 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 	}
 
 	// Sign with HS256. The returned string is the raw token displayed once to the user.
-	rawToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
+	jwtString, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
 	if err != nil {
 		return "", "", fmt.Errorf("sign jwt: %w", err)
 	}
+
+	// Prefix the JWT with its JTI so the token is self-identifying.
+	//
+	// WHY prefix with JTI (not rely on JWT payload decoding):
+	//   The JTI is buried inside the base64-encoded JWT payload. An operator holding a
+	//   token string has no quick way to know which DB row to revoke without base64-decoding
+	//   and JSON-parsing the middle segment. Prefixing makes it trivial:
+	//     token = "6f2647d8-ff3d-4922-bac5-0aca3a6f11e2.eyJhbGci..."
+	//   The operator reads the first segment up to the first dot — that is the JTI to revoke.
+	//
+	// WHY "." as the separator (same as JWT internal separator):
+	//   UUID v4 contains only hex digits and hyphens — no dots. The first dot in the
+	//   prefixed token is therefore always the JTI/JWT boundary. SplitN(token, ".", 2)
+	//   in ValidateToken safely strips the prefix without ambiguity.
+	//
+	// HASH covers the full prefixed token (not just the JWT):
+	//   Both issuance (here) and validation (ValidateToken) hash the same full string,
+	//   so the token_hash DB column continues to bind the token to its DB row correctly.
+	rawToken = jti + "." + jwtString
 
 	// Compute the SHA-256 hash — this is the only token value persisted in the DB (SEC-02).
 	tokenHash := hashToken(rawToken)
@@ -136,6 +156,18 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 func ValidateToken(ctx context.Context, db *sql.DB, rawToken string, secret []byte) (*Claims, error) {
 	var claims Claims
 
+	// Strip the JTI prefix before JWT parsing.
+	//
+	// Format: {jti}.{header}.{payload}.{signature}
+	// SplitN with n=2 splits on the first dot only — UUID contains no dots, so this is
+	// unambiguous. The jwtString is passed to jwt.ParseWithClaims; rawToken (full prefixed)
+	// is used for the token_hash DB lookup so it matches what was stored at issuance.
+	parts := strings.SplitN(rawToken, ".", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid token format")
+	}
+	jwtString := parts[1]
+
 	// keyFunc validates the signing method and returns the secret.
 	// The WithValidMethods option is the primary defense against algorithm switching attacks (SEC-02).
 	keyFunc := func(t *jwt.Token) (interface{}, error) {
@@ -145,8 +177,9 @@ func ValidateToken(ctx context.Context, db *sql.DB, rawToken string, secret []by
 		return secret, nil
 	}
 
-	// Parse and validate the JWT. WithValidMethods enforces HS256 at the parser level.
-	token, err := jwt.ParseWithClaims(rawToken, &claims, keyFunc, jwt.WithValidMethods([]string{"HS256"}))
+	// Parse and validate the JWT (without the JTI prefix).
+	// WithValidMethods enforces HS256 at the parser level.
+	token, err := jwt.ParseWithClaims(jwtString, &claims, keyFunc, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil {
 		return nil, fmt.Errorf("parse jwt: %w", err)
 	}
