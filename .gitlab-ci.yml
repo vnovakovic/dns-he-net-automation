@@ -4,44 +4,37 @@
 #   Auto DevOps assumes the project builds a Docker image via /build/build.sh.
 #   This project is a Go binary, not a container. Auto DevOps tries to push to
 #   the GitLab Container Registry and fails when the Docker client is outdated.
-#   A custom pipeline runs the actual Go build and test steps directly.
 #
 # WHY no templ generate step:
-#   The *_templ.go generated files are committed to the repo. Regenerating in CI
-#   would require installing github.com/a-h/templ which pulls in golang.org/x/tools
-#   (~200MB) and exhausts the runner's disk. Since the generated files are already
-#   present, go build and go test work without running templ generate.
+#   The *_templ.go generated files are committed to the repo — go build works
+#   without regenerating them in CI.
 #
-# WHY no custom GOPATH:
-#   The official golang Docker image ships with /go already set as GOPATH.
-#   Overriding it to $CI_PROJECT_DIR/.go writes all module downloads to the
-#   project directory on the runner, which has limited disk space and caused
-#   "no space left on device" errors. Using the default /go path avoids this.
+# WHY GOMODCACHE=/tmp/gomod:
+#   The runner's overlay filesystem for /go is part of the Docker image layer
+#   and has very limited free space. /tmp is a separate tmpfs mount with its own
+#   allocation — module downloads succeed there. Without this, go build fails with
+#   "mkdir /go/pkg: no space left on device".
+#
+# WHY no cache config:
+#   The runner log showed "No URL provided, cache will not be downloaded from shared
+#   cache server" — the shared cache server is not configured for this runner.
+#   Keeping a cache stanza that does nothing just adds noise and a slow cache-check step.
 
 stages:
   - build
   - test
 
-# Cache Go module downloads between pipeline runs.
-# Key on go.sum so the cache is invalidated when dependencies change.
-.go-cache: &go-cache
-  cache:
-    key:
-      files:
-        - go.sum
-    paths:
-      - /go/pkg/mod
+variables:
+  GOMODCACHE: /tmp/gomod
 
 build:
   stage: build
   image: golang:1.25
-  <<: *go-cache
   script:
     - go build ./...
 
 test:
   stage: test
   image: golang:1.25
-  <<: *go-cache
   script:
     - go test ./...
