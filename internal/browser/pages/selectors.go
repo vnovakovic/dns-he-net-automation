@@ -2,6 +2,7 @@
 // All CSS selectors are defined as named constants in this file.
 //
 // Selectors verified against live dns.he.net on 2026-02-27 via Playwright MCP.
+// Updated 2026-03-03: SelectorRecordSubmit fixed for edit mode (see comment below).
 // Do NOT use these selector strings outside this package — go through the Page Object methods.
 package pages
 
@@ -42,7 +43,19 @@ const (
 	SelectorRecordPort     = `input#_port`
 	SelectorRecordTarget   = `input#_target`
 	SelectorRecordDynamic  = `input#_dynamic`
-	SelectorRecordSubmit   = `input[name="hosted_dns_editrecord"][value="Submit"]`
+	// WHY no [value="Submit"] constraint:
+	//   The same input#_hds element is reused for both add and edit operations, but
+	//   dns.he.net changes its value attribute at runtime via JavaScript:
+	//     - Add mode:  value="Submit"
+	//     - Edit mode: value="Update"
+	//   Constraining by value="Submit" caused a 30s timeout on every UpdateRecord call
+	//   because the selector never matched the edit-mode button. Matching by name alone
+	//   is safe — there is only one input[name="hosted_dns_editrecord"] on the page.
+	//
+	//   PREVIOUSLY: `input[name="hosted_dns_editrecord"][value="Submit"]`
+	//   BROKEN FOR: all edit/update operations (UpdateRecord handler)
+	//   FIXED ON:   2026-03-03 after inspecting live DOM with Playwright MCP
+	SelectorRecordSubmit   = `input[name="hosted_dns_editrecord"]`
 	SelectorRecordCancel   = `input#btn_cancel`
 )
 

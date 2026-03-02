@@ -133,7 +133,14 @@ func (rp *RecordFormPage) FillAndSubmit(rec model.Record) error {
 // EditExistingRecord clicks the record row with the given ID to open the edit form,
 // then waits for the record form to appear.
 func (rp *RecordFormPage) EditExistingRecord(recordID string) error {
-	rowSelector := fmt.Sprintf("tr#%s", recordID)
+	// WHY attribute selector instead of CSS ID selector (tr#RECORDID):
+	//   HE.net record row IDs are purely numeric (e.g. "8900607586"). CSS ID selectors
+	//   require the ID to begin with a letter — a leading digit is a parse error and
+	//   Playwright throws "is not a valid selector". The attribute selector [id="..."]
+	//   has no such restriction and works identically for all values.
+	//
+	//   SAME fix applied in ParseRecordRow in zonelist.go — keep both in sync.
+	rowSelector := fmt.Sprintf(`tr[id="%s"]`, recordID)
 	if err := rp.page.Locator(rowSelector).Click(); err != nil {
 		return fmt.Errorf("click record row %q: %w", recordID, err)
 	}

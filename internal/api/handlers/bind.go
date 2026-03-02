@@ -88,7 +88,7 @@ func ExportZone(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Bre
 			})
 		})
 		if err != nil {
-			handleBrowserError(w, err)
+			handleBrowserError(w, r, err)
 			return
 		}
 
@@ -185,7 +185,7 @@ func ImportZone(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Bre
 			})
 		})
 		if err != nil {
-			handleBrowserError(w, err)
+			handleBrowserError(w, r, err)
 			return
 		}
 

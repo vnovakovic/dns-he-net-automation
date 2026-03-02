@@ -76,7 +76,12 @@ func toRecordResponse(r model.Record, fetchedAt time.Time) RecordResponse {
 
 // handleBrowserError writes a standardised JSON error response for browser-layer
 // errors, mapping session-manager sentinel errors to the appropriate HTTP status codes.
-func handleBrowserError(w http.ResponseWriter, err error) {
+// WHY r is passed here: the original implementation omitted the request context, so browser
+// errors were silently swallowed — no log entry was written and the only signal was the
+// `browser_error` JSON body. Adding slog.ErrorContext here ensures every browser failure
+// is logged with the request ID for correlation with Playwright traces.
+func handleBrowserError(w http.ResponseWriter, r *http.Request, err error) {
+	slog.ErrorContext(r.Context(), "browser operation failed", "error", err)
 	switch {
 	case errors.Is(err, browser.ErrQueueTimeout):
 		response.WriteError(w, http.StatusTooManyRequests, "queue_timeout", "Request queue full, retry later")
@@ -147,7 +152,7 @@ func ListRecords(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Br
 		})
 
 		if err != nil {
-			handleBrowserError(w, err)
+			handleBrowserError(w, r, err)
 			return
 		}
 
@@ -233,7 +238,7 @@ func GetRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Brea
 				response.WriteError(w, http.StatusNotFound, "record_not_found", "Record not found")
 				return
 			}
-			handleBrowserError(w, err)
+			handleBrowserError(w, r, err)
 			return
 		}
 
@@ -359,7 +364,7 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 		}
 
 		if err != nil {
-			handleBrowserError(w, err)
+			handleBrowserError(w, r, err)
 			return
 		}
 
@@ -492,7 +497,7 @@ func UpdateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 				response.WriteError(w, http.StatusNotFound, "record_not_found", "Record not found")
 				return
 			}
-			handleBrowserError(w, err)
+			handleBrowserError(w, r, err)
 			return
 		}
 
@@ -584,7 +589,7 @@ func DeleteRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 		}
 
 		if err != nil {
-			handleBrowserError(w, err)
+			handleBrowserError(w, r, err)
 			return
 		}
 

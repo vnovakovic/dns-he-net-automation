@@ -78,7 +78,7 @@ func SyncRecords(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Br
 			})
 		})
 		if err != nil {
-			handleBrowserError(w, err)
+			handleBrowserError(w, r, err)
 			return
 		}
 
