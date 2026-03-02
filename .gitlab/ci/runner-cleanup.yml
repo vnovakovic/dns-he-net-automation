@@ -37,10 +37,11 @@
 #   apt package cache in /var/cache/apt/archives grows after OS updates.
 #   Cleaning it reclaims space without affecting installed packages.
 
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_PIPELINE_SOURCE == "api"
+# WHY no workflow block here (moved to standalone note):
+#   When this file was standalone it used workflow: rules to restrict execution
+#   to web/api triggers. Now it is included from .gitlab-ci.yml — the parent
+#   pipeline's workflow controls when the pipeline runs. The cleanup job itself
+#   uses "when: manual" which is sufficient to prevent accidental execution.
 
 stages:
   - cleanup

@@ -23,6 +23,16 @@
 stages:
   - build
   - test
+  - cleanup
+
+# WHY include runner-cleanup.yml:
+#   GitLab's "Run pipeline" UI and API always use the project's configured CI config
+#   path (.gitlab-ci.yml) — there is no per-trigger config override. Including the
+#   cleanup file here makes the manual cleanup job available in every pipeline without
+#   requiring a project-settings change. The job runs only when manually triggered
+#   (when: manual) so it never fires during normal build/test runs.
+include:
+  - local: .gitlab/ci/runner-cleanup.yml
 
 variables:
   GOMODCACHE: /tmp/gomod
