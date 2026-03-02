@@ -11,7 +11,7 @@ import (
 // All fields use 12-factor style env var binding (OPS-03).
 type Config struct {
 	// Port is the HTTP listen port (default: 8080).
-	Port int `env:"PORT" envDefault:"8080"`
+	Port int `env:"PORT" envDefault:"9001"`
 
 	// MetricsPort is the dedicated Prometheus metrics listen port (default: 9090).
 	// Serving metrics on a separate port keeps the scrape target isolated from the API:
