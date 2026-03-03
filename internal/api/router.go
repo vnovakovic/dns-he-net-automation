@@ -136,6 +136,11 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 				r.Route("/records", func(r chi.Router) {
 					r.Get("/", handlers.ListRecords(db, sm, breakers))
 					r.With(middleware.RequireAdmin).Post("/", handlers.CreateRecord(db, sm, breakers))
+					// WHY DELETE "/" separate from DELETE "/{recordID}":
+					//   chi routes DELETE / and DELETE /{recordID} independently — no ambiguity.
+					//   ?name= on the collection endpoint avoids forcing callers to discover the
+					//   numeric record ID first, reducing a 2-step flow to a single API call.
+					r.With(middleware.RequireAdmin).Delete("/", handlers.DeleteRecordByName(db, sm, breakers))
 					r.Route("/{recordID}", func(r chi.Router) {
 						r.Get("/", handlers.GetRecord(db, sm, breakers))
 						r.With(middleware.RequireAdmin).Put("/", handlers.UpdateRecord(db, sm, breakers))

@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -54,6 +57,10 @@ type RecordResponse struct {
 	Target    string           `json:"target"`
 	Dynamic   bool             `json:"dynamic"`
 	FetchedAt time.Time        `json:"fetched_at"`
+	// DDNSKey is returned only when a DDNS key was set or auto-generated during this request.
+	// omitempty ensures the field is absent for non-dynamic records and idempotent calls
+	// where the caller provided no key (avoiding silent key rotation of existing DDNS clients).
+	DDNSKey string `json:"ddns_key,omitempty"`
 }
 
 // toRecordResponse converts a model.Record to a RecordResponse for JSON encoding.
@@ -72,6 +79,24 @@ func toRecordResponse(r model.Record, fetchedAt time.Time) RecordResponse {
 		Dynamic:   r.Dynamic,
 		FetchedAt: fetchedAt,
 	}
+}
+
+// generateDDNSKey produces a 24-char hex string from 12 crypto/rand bytes.
+// WHY crypto/rand: DDNS keys act as passwords; math/rand is not safe for credentials.
+func generateDDNSKey() (string, error) {
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate DDNS key: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// createRecordRequest extends model.Record with an optional ddns_key.
+// ddns_key is not a DNS attribute — it is HE.net's DDNS update credential.
+// Kept separate from model.Record to avoid polluting the record model with auth data.
+type createRecordRequest struct {
+	model.Record
+	DDNSKey string `json:"ddns_key"`
 }
 
 // handleBrowserError writes a standardised JSON error response for browser-layer
@@ -260,14 +285,17 @@ func GetRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.Brea
 // Browser operations are wrapped with circuit breaker + retry (RES-02, RES-03).
 func CreateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var rec model.Record
-		if err := json.NewDecoder(r.Body).Decode(&rec); err != nil {
+		var req createRecordRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			response.WriteError(w, http.StatusBadRequest, "invalid_body", "Invalid JSON body")
 			return
 		}
 
 		zoneID := chi.URLParam(r, "zoneID")
+		rec := req.Record
 		rec.ZoneID = zoneID
+		// ddnsKey is declared here so the closure can mutate it (auto-generate path).
+		ddnsKey := strings.TrimSpace(req.DDNSKey)
 
 		// Validate record type is in the v1 supported set.
 		if !v1RecordTypes[rec.Type] {
@@ -319,6 +347,15 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 							}
 						}
 						existed = true
+						// Only set DDNS key for existing dynamic records when caller explicitly
+						// provides one. Auto-generating would silently rotate the key and break
+						// existing DDNS clients that already use the old key.
+						if rec.Dynamic && ddnsKey != "" {
+							rf2 := pages.NewRecordFormPage(page)
+							if err := rf2.SetDDNSKey(existingID, ddnsKey); err != nil {
+								return err
+							}
+						}
 						return nil
 					}
 
@@ -340,7 +377,38 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 						return errors.New("could not find newly created record after submission")
 					}
 					rec.ID = newID
-					result = rec
+					// WHY scrape the actual record for dynamic types:
+					//   HE.net ignores submitted content for dynamic A/AAAA and sets it to the
+					//   requester's current IP. Return the real stored content so the caller
+					//   knows what HE.net actually recorded.
+					if rec.Dynamic {
+						actualRec, parseErr := zl.ParseRecordRow(newID)
+						if parseErr != nil {
+							return parseErr
+						}
+						actualRec.ZoneID = zoneID
+						result = *actualRec
+					} else {
+						result = rec
+					}
+
+					// Set DDNS key for new dynamic records. Page is still on the zone list
+					// after FillAndSubmit + FindRecord — both leave the page there.
+					// WHY auto-generate when no key provided: a dynamic record without a key
+					// is non-functional; caller must know the key to use dyn.dns.he.net updates.
+					if rec.Dynamic {
+						if ddnsKey == "" {
+							var genErr error
+							ddnsKey, genErr = generateDDNSKey()
+							if genErr != nil {
+								return genErr
+							}
+						}
+						rf2 := pages.NewRecordFormPage(page)
+						if err := rf2.SetDDNSKey(newID, ddnsKey); err != nil {
+							return err
+						}
+					}
 					return nil
 				})
 			})
@@ -377,10 +445,12 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 			"duration_ms", time.Since(start).Milliseconds(),
 		)
 
+		resp := toRecordResponse(result, start)
+		resp.DDNSKey = ddnsKey // empty for existed+no-key; omitempty ensures absent in JSON
 		if existed {
-			response.WriteJSON(w, http.StatusOK, toRecordResponse(result, start))
+			response.WriteJSON(w, http.StatusOK, resp)
 		} else {
-			response.WriteJSON(w, http.StatusCreated, toRecordResponse(result, start))
+			response.WriteJSON(w, http.StatusCreated, resp)
 		}
 	}
 }
@@ -509,6 +579,167 @@ func UpdateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 		)
 
 		response.WriteJSON(w, http.StatusOK, toRecordResponse(updated, start))
+	}
+}
+
+// DeleteRecordByName handles DELETE /api/v1/zones/{zoneID}/records?name=...
+//
+// Finds all records whose name matches ?name= (case-insensitive), optionally filtered
+// by ?type=, then deletes each one within a single browser session.
+//
+// WHY a separate handler instead of a client-side GET-then-DELETE loop:
+//   Each browser session acquire + zone navigation costs ~5-10s. Batching all
+//   name-matched deletes inside one sm.WithAccount call amortises that cost and
+//   avoids races where a second caller could observe an intermediate
+//   partially-deleted state.
+//
+// WHY ?name= is a query param (not a path segment or body):
+//   DELETE semantics: the resource is identified in the URL/query. A query param
+//   makes the intent explicit and auditable in server access logs without
+//   requiring a request body.
+//
+// Idempotent: returns 204 when no matching records exist.
+func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		zoneID := chi.URLParam(r, "zoneID")
+
+		filterName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("name")))
+		if filterName == "" {
+			response.WriteError(w, http.StatusBadRequest, "missing_name", "Query parameter ?name= is required")
+			return
+		}
+		// ?type= is required. Behaviour:
+		//   absent         → 400; caller must be explicit about scope
+		//   ?type= (empty) → 400; almost always a caller bug (un-interpolated variable)
+		//   ?type=ANY      → delete all types with the given name
+		//   ?type=A etc.   → delete only records of that specific type
+		//
+		// WHY ?type= is required (not optional):
+		//   Omitting it previously meant "delete all types", which was too easy to
+		//   trigger by accident. Requiring an explicit ?type=ANY forces the caller to
+		//   acknowledge the mass-delete scope, preventing silent data loss.
+		if !r.URL.Query().Has("type") {
+			response.WriteError(w, http.StatusBadRequest, "missing_type",
+				"Query parameter ?type= is required; use ?type=ANY to delete all types, or specify a type (A, AAAA, CNAME, MX, TXT, SRV, CAA, NS)")
+			return
+		}
+		rawType := strings.TrimSpace(r.URL.Query().Get("type"))
+		if rawType == "" {
+			response.WriteError(w, http.StatusBadRequest, "invalid_type",
+				"?type= must not be empty; use ?type=ANY to delete all types, or specify a type (A, AAAA, CNAME, MX, TXT, SRV, CAA, NS)")
+			return
+		}
+		var filterType model.RecordType // empty = all types
+		if upper := strings.ToUpper(rawType); upper != "ANY" {
+			filterType = model.RecordType(upper)
+		}
+		// upper == "ANY" → filterType stays "" → all types deleted
+
+		claims := middleware.ClaimsFromContext(r.Context())
+		if claims == nil {
+			response.WriteError(w, http.StatusUnauthorized, "missing_claims", "Authentication required")
+			return
+		}
+
+		start := time.Now()
+		var deletedIDs []string
+
+		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
+			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
+				return sm.WithAccount(ctx, claims.AccountID, "delete_record_by_name", func(page playwright.Page) error {
+					zl := pages.NewZoneListPage(page)
+
+					// ListRecords navigates to the zone and returns full record objects
+					// (id, type, name) — no separate ParseRecordRow needed.
+					records, err := zl.ListRecords(zoneID)
+					if err != nil {
+						return err
+					}
+
+					// GetZoneName reads the zone name from the current page; required by
+					// the deleteRecord JS function that rf.DeleteRecord wraps.
+					zoneName, err := zl.GetZoneName(zoneID)
+					if err != nil {
+						return err
+					}
+
+					// Collect matching records before deleting to avoid mutating the
+					// slice while iterating and to allow logging the full deleted set.
+					var toDelete []model.Record
+					for _, rec := range records {
+						if !strings.EqualFold(rec.Name, filterName) {
+							continue
+						}
+						if filterType != "" && rec.Type != filterType {
+							continue
+						}
+						toDelete = append(toDelete, rec)
+					}
+
+					// Delete each matching record. After each deleteRecord JS call the page
+					// reloads to the zone list — the next call finds the JS still present.
+					rf := pages.NewRecordFormPage(page)
+					for _, rec := range toDelete {
+						if err := rf.DeleteRecord(rec.ID, zoneName, string(rec.Type)); err != nil {
+							return err
+						}
+						deletedIDs = append(deletedIDs, rec.ID)
+					}
+
+					return nil
+				})
+			})
+		})
+
+		// Audit one entry per deleted record (mirrors by-ID delete behaviour).
+		// If no records matched, write a single no-op entry so the action is traceable.
+		auditResult := "success"
+		auditErrMsg := ""
+		if err != nil {
+			auditResult = "failure"
+			auditErrMsg = err.Error()
+		}
+		if len(deletedIDs) == 0 {
+			if auditErr := audit.Write(r.Context(), db, audit.Entry{
+				TokenID:   claims.ID,
+				AccountID: claims.AccountID,
+				Action:    "delete",
+				Resource:  "record:by-name:" + filterName,
+				Result:    auditResult,
+				ErrorMsg:  auditErrMsg,
+			}); auditErr != nil {
+				slog.ErrorContext(r.Context(), "audit log write failed", "error", auditErr)
+			}
+		}
+		for _, id := range deletedIDs {
+			if auditErr := audit.Write(r.Context(), db, audit.Entry{
+				TokenID:   claims.ID,
+				AccountID: claims.AccountID,
+				Action:    "delete",
+				Resource:  "record:" + id,
+				Result:    auditResult,
+				ErrorMsg:  auditErrMsg,
+			}); auditErr != nil {
+				slog.ErrorContext(r.Context(), "audit log write failed", "error", auditErr)
+			}
+		}
+
+		if err != nil {
+			handleBrowserError(w, r, err)
+			return
+		}
+
+		slog.InfoContext(r.Context(), "delete record by name done",
+			"account_id", claims.AccountID,
+			"zone_id", zoneID,
+			"name", filterName,
+			"type_filter", string(filterType),
+			"deleted_count", len(deletedIDs),
+			"deleted_ids", deletedIDs,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
+
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
