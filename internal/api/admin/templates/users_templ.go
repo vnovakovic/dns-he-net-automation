@@ -37,6 +37,14 @@ type UserRow struct {
 //
 //	Usernames may contain dots; CSS id selectors break on dots.
 //	"closest tr" targets the enclosing row without any id dependency.
+//
+// WHY tbody#users-table-body is always rendered (even when list is empty):
+//
+//	The Register form targets hx-target="#users-table-body" to append new rows via htmx.
+//	If the tbody is only rendered when len(users) > 0, registering the very first user
+//	silently fails — htmx finds no target, drops the response, and shows nothing.
+//	Keeping the tbody always present ensures the first registration works correctly.
+//	The empty-state message uses a <tr> so it is valid table markup.
 func UsersPage(users []UserRow, data PageData) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -70,32 +78,24 @@ func UsersPage(users []UserRow, data PageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-header\"><h2>Account Users</h2><p class=\"text-muted\">Account Users log in to the admin UI and manage their own dns.he.net accounts. Only the Server Admin can create or remove them.</p></div><div class=\"card\" style=\"margin-bottom:1rem;\"><h3>Registered Users</h3>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-header\"><h2>Account Users</h2><p class=\"text-muted\">Account Users log in to the admin UI and manage their own dns.he.net accounts. Only the Server Admin can create or remove them.</p></div><div class=\"card\" style=\"margin-bottom:1rem;\"><h3>Registered Users</h3><table class=\"data-table\"><thead><tr><th>Username</th><th>Created</th><th>Actions</th></tr></thead> <tbody id=\"users-table-body\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(users) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<p class=\"text-muted\">No account users registered yet.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<tr><td colspan=\"3\" class=\"text-muted\">No account users registered yet.</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<table class=\"data-table\"><thead><tr><th>Username</th><th>Created</th><th>Actions</th></tr></thead> <tbody id=\"users-table-body\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
 				for _, u := range users {
 					templ_7745c5c3_Err = UserTableRow(u).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</tbody></table>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"card\"><h3>Register User</h3><p class=\"text-muted\">Create a login for an operator. They will only see their own dns.he.net accounts.</p><div id=\"user-register-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/users\" hx-target=\"#users-table-body\" hx-swap=\"beforeend\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"username\">Username</label> <input type=\"text\" id=\"username\" name=\"username\" placeholder=\"e.g. alice\" required></div><div class=\"form-group\"><label for=\"password\">Password</label> <input type=\"password\" id=\"password\" name=\"password\" placeholder=\"login password\" required></div><button type=\"submit\" class=\"btn btn-primary\">Register</button></div></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</tbody></table></div><div class=\"card\"><h3>Register User</h3><p class=\"text-muted\">Create a login for an operator. They will only see their own dns.he.net accounts.</p><div id=\"user-register-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/users\" hx-target=\"#users-table-body\" hx-swap=\"beforeend\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"username\">Username</label> <input type=\"text\" id=\"username\" name=\"username\" placeholder=\"e.g. alice\" required></div><div class=\"form-group\"><label for=\"password\">Password</label> <input type=\"password\" id=\"password\" name=\"password\" placeholder=\"login password\" required></div><button type=\"submit\" class=\"btn btn-primary\">Register</button></div></form></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -132,59 +132,59 @@ func UserTableRow(u UserRow) templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<tr><td>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<tr><td>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(u.Username)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 85, Col: 18}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 92, Col: 18}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</td><td>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</td><td>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(u.CreatedAt.Format("2006-01-02"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 86, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 93, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</td><td><button class=\"btn btn-danger btn-sm\" hx-delete=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</td><td><button class=\"btn btn-danger btn-sm\" hx-delete=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/users/" + u.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 90, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 97, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML swap:500ms\" hx-confirm=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML swap:500ms\" hx-confirm=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs("Remove user '" + u.Username + "' and all their accounts?")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 93, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 100, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\">Remove</button></td></tr>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\">Remove</button></td></tr>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -224,7 +224,7 @@ func UserRegisterSuccess(u UserRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div id=\"user-register-error\" hx-swap-oob=\"true\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div id=\"user-register-error\" hx-swap-oob=\"true\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -257,20 +257,20 @@ func UserRegisterError(msg string) templ.Component {
 			templ_7745c5c3_Var9 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<p class=\"error-banner\" style=\"margin:0;\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<p class=\"error-banner\" style=\"margin:0;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 116, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 123, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

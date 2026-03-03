@@ -26,6 +26,13 @@ type UserRow struct {
 // WHY hx-target="closest tr" for Remove (same reason as AccountZonesList):
 //   Usernames may contain dots; CSS id selectors break on dots.
 //   "closest tr" targets the enclosing row without any id dependency.
+//
+// WHY tbody#users-table-body is always rendered (even when list is empty):
+//   The Register form targets hx-target="#users-table-body" to append new rows via htmx.
+//   If the tbody is only rendered when len(users) > 0, registering the very first user
+//   silently fails — htmx finds no target, drops the response, and shows nothing.
+//   Keeping the tbody always present ensures the first registration works correctly.
+//   The empty-state message uses a <tr> so it is valid table markup.
 templ UsersPage(users []UserRow, data PageData) {
 	@Layout(data) {
 		<div class="page-header">
@@ -34,24 +41,24 @@ templ UsersPage(users []UserRow, data PageData) {
 		</div>
 		<div class="card" style="margin-bottom:1rem;">
 			<h3>Registered Users</h3>
-			if len(users) == 0 {
-				<p class="text-muted">No account users registered yet.</p>
-			} else {
-				<table class="data-table">
-					<thead>
-						<tr>
-							<th>Username</th>
-							<th>Created</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody id="users-table-body">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Username</th>
+						<th>Created</th>
+						<th>Actions</th>
+					</tr>
+				</thead>
+				<tbody id="users-table-body">
+					if len(users) == 0 {
+						<tr><td colspan="3" class="text-muted">No account users registered yet.</td></tr>
+					} else {
 						for _, u := range users {
 							@UserTableRow(u)
 						}
-					</tbody>
-				</table>
-			}
+					}
+				</tbody>
+			</table>
 		</div>
 		<div class="card">
 			<h3>Register User</h3>
