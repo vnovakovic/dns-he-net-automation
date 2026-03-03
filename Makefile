@@ -33,7 +33,7 @@ docker-run:
 		-p 8080:8080 \
 		-e HE_ACCOUNTS='$(HE_ACCOUNTS)' \
 		-e JWT_SECRET='$(JWT_SECRET)' \
-		-e DB_PATH=/data/dns-he-net.db \
+		-e DB_PATH=/data/dnshenet-server.db \
 		-v dns-he-net-data:/data \
 		dns-he-net-automation:latest
 

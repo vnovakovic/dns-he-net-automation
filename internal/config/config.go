@@ -20,8 +20,8 @@ type Config struct {
 	// will still be available on the main port via /metrics).
 	MetricsPort int `env:"METRICS_PORT" envDefault:"9090"`
 
-	// DBPath is the SQLite database file path (default: dns-he-net.db).
-	DBPath string `env:"DB_PATH" envDefault:"dns-he-net.db"`
+	// DBPath is the SQLite database file path (default: dnshenet-server.db).
+	DBPath string `env:"DB_PATH" envDefault:"dnshenet-server.db"`
 
 	// HEAccountsJSON is used when VAULT_ADDR is not set. Optional when Vault is configured.
 	// Format: [{"id":"prod","username":"user","password":"pass"}]

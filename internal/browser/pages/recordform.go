@@ -152,21 +152,100 @@ func (rp *RecordFormPage) EditExistingRecord(recordID string) error {
 	return nil
 }
 
-// DeleteRecord triggers the JavaScript deleteRecord function for the given record,
-// then waits for the page to reload (confirming the deletion was submitted).
+// DeleteRecord deletes the record with the given ID by directly filling the hidden
+// delete form (form[name="del_record"]) and submitting it.
+//
+// WHY bypass deleteRecord() JS and directly fill + submit the form:
+//   dns.he.net's deleteRecord(id, zone, type) shows a native window.prompt() asking
+//   the user to type "DELETE" to confirm. In headless Playwright, window.prompt()
+//   auto-dismisses with null — deleteRecord() receives null instead of "DELETE", the
+//   condition fails, and the function exits WITHOUT submitting the form. The record
+//   appears deleted in our logs (no JS error is thrown) but remains on dns.he.net.
+//
+//   Direct approach: skip the JS dialog entirely. Set the hidden inputs
+//   (hosted_dns_recordid, hosted_dns_delconfirm) ourselves and call form.submit().
+//   This is equivalent to what deleteRecord() would do AFTER the user confirmed.
+//
+// WHY form.submit() may return a "context destroyed" Evaluate error:
+//   form.submit() triggers an immediate page navigation. Playwright's page.Evaluate()
+//   can detect the execution context being destroyed mid-call and return an error even
+//   though the submit succeeded. This is expected — we ignore that error and rely on
+//   WaitForLoadState to confirm the page actually reloaded after the delete POST.
+//
+// WHY hosted_dns_delconfirm = "DELETE":
+//   The server checks this field against "DELETE" before processing the deletion.
+//   Setting it to "DELETE" mirrors exactly what the browser sends when a user manually
+//   confirms in the prompt.
+//
+// DISCOVERY 2026-03-03: HTML dump (debug-delete-popup.html) of page after calling
+//   deleteRecord() JS confirmed form#record_delete has ONLY hidden inputs — no text
+//   input, no submit button. The visible "Type DELETE" prompt is window.prompt().
+//
+// PREVIOUS BROKEN APPROACH 1: Evaluate("deleteRecord(id, zone, rtype)") alone →
+//   prompt auto-dismissed with null, form never submitted, record persisted.
+// PREVIOUS BROKEN APPROACH 2: WaitFor("form#record_delete input[type='text']") →
+//   timed out 30s — no text input exists in the form DOM.
+//
+// zoneName and recordType are accepted for API compatibility but not used; the form's
+// hosted_dns_zoneid is already set by the server when the zone page loads.
 func (rp *RecordFormPage) DeleteRecord(recordID, zoneName, recordType string) error {
-	// Call the page's deleteRecord JS function with the three required arguments.
-	_, err := rp.page.Evaluate("([id, zone, rtype]) => deleteRecord(id, zone, rtype)",
-		[]interface{}{recordID, zoneName, recordType})
-	if err != nil {
-		return fmt.Errorf("call deleteRecord(%q, %q, %q): %w", recordID, zoneName, recordType, err)
+	// Step 1: Fill the hidden inputs. This is a pure DOM mutation — no navigation.
+	if _, err := rp.page.Evaluate(
+		`([id]) => {
+			document.getElementById('hosted_dns_recordid').value = id;
+			document.getElementById('hosted_dns_delconfirm').value = 'DELETE';
+		}`,
+		[]interface{}{recordID},
+	); err != nil {
+		return fmt.Errorf("fill delete form inputs for record %q: %w", recordID, err)
 	}
 
+	// Step 2: Submit the form. Triggers a page navigation — Evaluate() may return
+	// a "context destroyed" error even on success. Ignored intentionally.
+	_, _ = rp.page.Evaluate(`() => document.forms['del_record'].submit()`, nil)
+
+	// Step 3: Wait for the page to settle after the delete POST + redirect.
 	if err := rp.page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
 		State: playwright.LoadStateNetworkidle,
 	}); err != nil {
-		return fmt.Errorf("wait for load state after deleteRecord: %w", err)
+		return fmt.Errorf("wait for load state after delete submit (record %q): %w", recordID, err)
 	}
 
+	return nil
+}
+
+// SetDDNSKey sets (or regenerates) the DDNS update password for a dynamic record.
+// Must be called while the browser page is on the zone's record list.
+//
+// WHY separate from FillAndSubmit:
+//
+//	The DDNS key uses a separate overlay form (img[alt="generate"] → form#edit_record
+//	with name="generate_key"). It cannot be set as part of the regular add/edit flow.
+//
+// WHY attribute selector for row: numeric record IDs are invalid in CSS id selectors.
+//
+//	Same fix as EditExistingRecord and ParseRecordRow. See selectors.go for DDNS selectors.
+func (rp *RecordFormPage) SetDDNSKey(recordID, key string) error {
+	genSelector := fmt.Sprintf(`tr[id="%s"] img[alt="generate"]`, recordID)
+	if err := rp.page.Locator(genSelector).Click(); err != nil {
+		return fmt.Errorf("click DDNS generate icon for record %q: %w", recordID, err)
+	}
+	if err := rp.page.Locator(SelectorDDNSKeyForm).WaitFor(); err != nil {
+		return fmt.Errorf("wait for DDNS key form for record %q: %w", recordID, err)
+	}
+	if err := rp.page.Locator(SelectorDDNSKeyInput).Fill(key); err != nil {
+		return fmt.Errorf("fill DDNS key for record %q: %w", recordID, err)
+	}
+	if err := rp.page.Locator(SelectorDDNSKeyInput2).Fill(key); err != nil {
+		return fmt.Errorf("fill DDNS key confirmation for record %q: %w", recordID, err)
+	}
+	if err := rp.page.Locator(SelectorDDNSKeySubmit).Click(); err != nil {
+		return fmt.Errorf("submit DDNS key form for record %q: %w", recordID, err)
+	}
+	if err := rp.page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+		State: playwright.LoadStateNetworkidle,
+	}); err != nil {
+		return fmt.Errorf("wait after DDNS key submit for record %q: %w", recordID, err)
+	}
 	return nil
 }

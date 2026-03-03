@@ -15,5 +15,6 @@ import "embed"
 // DEPENDENCY: If files in static/ are moved or renamed, update this directive AND
 // the http.FileServer call in router.go. The embed glob must match actual filenames.
 //
-//go:embed static/admin.css static/htmx.min.js
+// DEPENDENCY: any new file added to static/ must also be listed here.
+//go:embed static/admin.css static/htmx.min.js static/admin.js
 var staticFS embed.FS

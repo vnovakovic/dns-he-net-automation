@@ -583,6 +583,161 @@ body.login-page {
 .htmx-request.htmx-indicator { opacity: 1; }
 
 /* ============================================================
+   Zone table — curl template buttons (.tpl-btn)
+   WHY distinct style (not reusing btn-primary/btn-danger):
+     Template buttons are a third category — informational/utility, not destructive.
+     A muted outline style makes them visually lighter than action buttons.
+   ============================================================ */
+.tpl-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.tpl-btn {
+  font-size: 0.72em;
+  font-weight: 600;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 0.1s, color 0.1s;
+}
+
+.tpl-btn:hover {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* ============================================================
+   Curl template dialog (.curl-dialog)
+   WHY <dialog> (not a custom overlay): native HTML modal — no JS library,
+   ESC key closes it automatically, focus-trapping is handled by the browser.
+   ============================================================ */
+.curl-dialog {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0;
+  width: min(720px, 96vw);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  background: var(--card);
+  color: var(--foreground);
+}
+
+.curl-dialog::backdrop {
+  background: rgba(0,0,0,0.45);
+}
+
+.curl-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.92em;
+}
+
+.curl-dialog-close {
+  background: none;
+  border: none;
+  font-size: 1.1em;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  padding: 2px 6px;
+}
+
+.curl-dialog-token {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85em;
+}
+
+.curl-dialog-token label {
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.curl-dialog-token input {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.85em;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.curl-cmd {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  font-size: 0.8em;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--background);
+  color: var(--foreground);
+  border-bottom: 1px solid var(--border);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.curl-dialog-footer {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  justify-content: flex-end;
+}
+
+/* Green flash when copy succeeds */
+.btn-copied {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+}
+
+/* ============================================================
+   Account Card — Zones collapse/expand (details/summary)
+   WHY <details>/<summary>: native HTML disclosure widget — no JS required,
+   keyboard-accessible, and works in all modern browsers.
+   ============================================================ */
+details.zones-collapsible > summary.zones-summary {
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  list-style: none;         /* remove default triangle on some browsers */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+details.zones-collapsible > summary.zones-summary::before {
+  content: "▶";
+  font-size: 0.7em;
+  transition: transform 0.15s ease;
+  display: inline-block;
+}
+
+details.zones-collapsible[open] > summary.zones-summary::before {
+  transform: rotate(90deg);
+}
+
+details.zones-collapsible > summary.zones-summary::-webkit-details-marker {
+  display: none;  /* hide WebKit default triangle */
+}
+
+/* ============================================================
    Responsive — Sidebar collapses at <= 768px
    ============================================================ */
 @media (max-width: 768px) {

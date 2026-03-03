@@ -670,7 +670,6 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 					if err := zl.NavigateToZone(zoneID); err != nil {
 						return err
 					}
-
 					rows, err := zl.GetRecordRows()
 					if err != nil {
 						return err
@@ -678,7 +677,18 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 
 					// Collect matching records before deleting to avoid mutating the
 					// slice while iterating and to allow logging the full deleted set.
-					var toDelete []model.Record
+					//
+					// WHY deleteTarget carries rowID separately from rec.ID:
+					//   ParseRecordRow reads td[1] which is a HIDDEN cell — Playwright's
+					//   InnerText() returns "" for hidden elements, so rec.ID is always "".
+					//   The correct record ID for rf.DeleteRecord comes from row.ID (the <tr>
+					//   element's id HTML attribute, read by GetRecordRows via GetAttribute).
+					//   Passing rec.ID ("") to deleteRecord JS causes it to silently do nothing.
+					type deleteTarget struct {
+						rowID   string
+						recType model.RecordType
+					}
+					var toDelete []deleteTarget
 					for _, row := range rows {
 						if row.IsLocked {
 							continue
@@ -695,17 +705,15 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 						if filterType != "" && rec.Type != filterType {
 							continue
 						}
-						toDelete = append(toDelete, *rec)
+						toDelete = append(toDelete, deleteTarget{rowID: row.ID, recType: rec.Type})
 					}
 
-					// Delete each matching record. After each deleteRecord JS call the page
-					// reloads to the zone list — the next call finds the JS still present.
 					rf := pages.NewRecordFormPage(page)
-					for _, rec := range toDelete {
-						if err := rf.DeleteRecord(rec.ID, zoneName, string(rec.Type)); err != nil {
+					for _, t := range toDelete {
+						if err := rf.DeleteRecord(t.rowID, zoneName, string(t.recType)); err != nil {
 							return err
 						}
-						deletedIDs = append(deletedIDs, rec.ID)
+						deletedIDs = append(deletedIDs, t.rowID)
 					}
 
 					return nil

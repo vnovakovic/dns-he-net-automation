@@ -214,35 +214,45 @@ type RecordRow struct {
 }
 
 // GetRecordRows returns all record rows for the current zone page,
-// including both editable rows (tr.dns_tr) and locked rows (tr.dns_tr_locked).
+// including editable rows (tr.dns_tr), dynamic rows (tr.dns_tr_dynamic), and locked rows (tr.dns_tr_locked).
+//
+// WHY three selectors:
+//
+//	HE.net uses class="dns_tr" for static records and class="dns_tr_dynamic" for DDNS records.
+//	A single CSS selector cannot match both without resorting to :is() which Playwright may
+//	not support on all versions. Querying separately keeps each call simple and explicit.
+//	DISCOVERED: 2026-03-03 by dumping live page HTML — dynamic records were entirely invisible
+//	before SelectorRecordRowDynamic was added.
 func (zp *ZoneListPage) GetRecordRows() ([]RecordRow, error) {
 	var rows []RecordRow
 
-	// Collect editable rows.
-	editableRows := zp.page.Locator(SelectorRecordRow)
-	editableCount, err := editableRows.Count()
-	if err != nil {
-		return nil, fmt.Errorf("count editable record rows: %w", err)
+	// collectEditable queries rows by selector and appends them as non-locked.
+	collectEditable := func(selector string) error {
+		locator := zp.page.Locator(selector)
+		count, err := locator.Count()
+		if err != nil {
+			return fmt.Errorf("count rows (%s): %w", selector, err)
+		}
+		for i := 0; i < count; i++ {
+			row := locator.Nth(i)
+			id, err := row.GetAttribute("id")
+			if err != nil {
+				return fmt.Errorf("get ID for row[%d] (%s): %w", i, selector, err)
+			}
+			text, err := row.InnerText()
+			if err != nil {
+				return fmt.Errorf("get text for row[%d] (%s): %w", i, selector, err)
+			}
+			rows = append(rows, RecordRow{ID: id, DisplayText: text, IsLocked: false})
+		}
+		return nil
 	}
 
-	for i := 0; i < editableCount; i++ {
-		row := editableRows.Nth(i)
-
-		id, err := row.GetAttribute("id")
-		if err != nil {
-			return nil, fmt.Errorf("get ID for editable row[%d]: %w", i, err)
-		}
-
-		text, err := row.InnerText()
-		if err != nil {
-			return nil, fmt.Errorf("get text for editable row[%d]: %w", i, err)
-		}
-
-		rows = append(rows, RecordRow{
-			ID:          id,
-			DisplayText: text,
-			IsLocked:    false,
-		})
+	if err := collectEditable(SelectorRecordRow); err != nil {
+		return nil, err
+	}
+	if err := collectEditable(SelectorRecordRowDynamic); err != nil {
+		return nil, err
 	}
 
 	// Collect locked rows (e.g., SOA).
@@ -443,15 +453,33 @@ func (zp *ZoneListPage) FindRecord(zoneID string, rec model.Record) (string, err
 
 // recordsMatch returns true when two records are considered identical for idempotency purposes.
 // Matching is type-specific:
+//   - Dynamic A/AAAA: Type + Name only (content NOT compared — see WHY below)
 //   - MX:  Type + Name (case-insensitive) + Content (case-insensitive) + Priority
 //   - SRV: Type + Name (case-insensitive) + Priority + Weight + Port + Target (case-insensitive)
 //   - All others: Type + Name (case-insensitive) + Content (case-insensitive)
+//
+// WHY skip content for dynamic A/AAAA:
+//
+//	When a dynamic A/AAAA record is created via the HE.net form, HE.net IGNORES
+//	the submitted IP and instead sets content to the requester's current public IP.
+//	Comparing content would therefore never match: we submit "1.2.3.4" but HE.net
+//	stores "47.73.x.x". Type+name match is correct and safe because HE.net limits
+//	each hostname to one dynamic A record.
+//
+//	PREVIOUSLY: content was always compared, causing both the idempotency pre-check
+//	and the post-create ID lookup to fail for every dynamic A/AAAA record.
+//	DISCOVERED: 2026-03-03 via debug screenshot showing the record was created with
+//	the server's current IP, not the submitted IP.
 func recordsMatch(a, b model.Record) bool {
 	if a.Type != b.Type {
 		return false
 	}
 	if !strings.EqualFold(a.Name, b.Name) {
 		return false
+	}
+	// Dynamic A/AAAA: HE.net overwrites content — match by type+name only.
+	if b.Dynamic && (a.Type == model.RecordTypeA || a.Type == model.RecordTypeAAAA) {
+		return true
 	}
 	switch a.Type {
 	case model.RecordTypeMX:

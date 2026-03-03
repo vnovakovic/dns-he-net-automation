@@ -102,16 +102,20 @@ func RegisterAdminRoutes(
 			})
 
 			// Account management pages.
-			// load-zones: fetches zones from dns.he.net via browser session, upserts to DB,
-			//   returns AccountZonesList partial for htmx insertion into the account card.
+			// load-zones: fetches zones from dns.he.net via browser session, returns
+			//   AccountZonesSelectList (checkbox form) — does NOT write to the DB.
+			// zones/store: commits the operator-selected subset from the selection form to DB,
+			//   returns AccountZonesList partial (the explicit "Store selected" step).
 			// zones/{zoneName}: removes a single zone from the DB (not from dns.he.net).
+			// WHY no POST /zones (manual add): zones are always loaded from HE via load-zones.
+			//   The manual add form was removed — use "Load zones from HE" + select instead.
 			//   {zoneName} captures the full domain name including dots (chi routes by segment,
 			//   and dots within a segment are captured without special handling).
 			r.Get("/accounts", handleAccountsPage(db))
 			r.Post("/accounts", handleAccountCreate(db))
 			r.Delete("/accounts/{accountID}", handleAccountDelete(db, sm))
 			r.Get("/accounts/{accountID}/load-zones", handleAccountLoadZones(db, sm, breakers))
-			r.Post("/accounts/{accountID}/zones", handleAccountZoneAdd(db))
+			r.Post("/accounts/{accountID}/zones/store", handleAccountZonesStore(db))
 			r.Delete("/accounts/{accountID}/zones/{zoneName}", handleAccountZoneRemove(db))
 
 			// Token management pages (handlers replaced by plan 03).
@@ -778,21 +782,20 @@ func handleSyncTrigger(db *sql.DB, sm *browser.SessionManager, breakers *resilie
 	}
 }
 
-// handleAccountLoadZones fetches the live zone list for one account via browser session,
-// upserts the results into the zones DB table, then returns the AccountZonesList htmx partial
-// (GET /admin/accounts/{accountID}/load-zones).
+// handleAccountLoadZones fetches the live zone list from dns.he.net and returns
+// AccountZonesSelectList — a checkbox form letting the operator choose which zones to store.
+// No DB write happens here; the explicit commit step is POST /zones/store.
+// (GET /admin/accounts/{accountID}/load-zones)
 //
-// WHY upsert to DB after fetching (not just return live data):
-//   Persisting zones in DB lets handleAccountsPage and handleZonesPage serve the Accounts
-//   and Zones pages without browser sessions on every load. The DB acts as a cache that is
-//   refreshed on demand by this handler. he_zone_id is preserved across refreshes via
-//   ON CONFLICT DO UPDATE, so export/import links remain valid after re-loading.
+// WHY two-step (load → select → store) instead of auto-upsert:
+//   Operators managing accounts with many zones (test domains, delegated subdomains) do not
+//   want every zone auto-imported. Returning a selection UI first lets them keep only the
+//   zones they actively manage, rather than silently polluting the DB with test entries.
 //
-// WHY return AccountZonesList (not ZonesForAccount):
-//   This handler is triggered from the Accounts page card — it replaces the zones sub-list
-//   inside the account card. ZonesForAccount is used by the Zones page, which has a
-//   different layout (account header + zones table in one card). AccountZonesList renders
-//   only the zones table (or empty state) without the account header.
+// WHY return AccountZonesSelectList (not AccountZonesList):
+//   AccountZonesList renders the persisted DB state. AccountZonesSelectList renders the live
+//   HE zone list as a checkbox form — it is intentionally transient and never touches the DB.
+//   After "Store selected" the zones div is replaced with AccountZonesList via htmx.
 func handleAccountLoadZones(db *sql.DB, sm *browser.SessionManager, breakers *resilience.BreakerRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accountID := chi.URLParam(r, "accountID")
@@ -813,105 +816,62 @@ func handleAccountLoadZones(db *sql.DB, sm *browser.SessionManager, breakers *re
 			return
 		}
 
-		// Upsert fetched zones into the DB.
-		// ON CONFLICT(account_id, name): PRIMARY KEY is (account_id, name).
-		// We update he_zone_id so that previously-empty entries get their numeric ID populated.
-		for _, z := range fetched {
-			if _, err := db.ExecContext(r.Context(),
-				`INSERT INTO zones (account_id, name, he_zone_id) VALUES (?, ?, ?)
-				 ON CONFLICT(account_id, name) DO UPDATE SET he_zone_id = excluded.he_zone_id`,
-				accountID, z.Name, z.ID,
-			); err != nil {
-				http.Error(w, "Failed to save zones: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-
-		// Return zones from DB (authoritative after upsert) — not the raw fetched slice.
-		// Reading from DB ensures the response reflects the persisted state.
-		zones, err := listZonesFromDB(r.Context(), db, accountID)
-		if err != nil {
-			http.Error(w, "Failed to list zones: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = templates.AccountZonesList(accountID, zones).Render(r.Context(), w)
+		_ = templates.AccountZonesSelectList(accountID, fetched).Render(r.Context(), w)
 	}
 }
 
-// handleAccountZoneAdd registers a zone under an account in the DB
-// (POST /admin/accounts/{accountID}/zones).
+// handleAccountZonesStore persists the operator-selected zone subset to the DB
+// (POST /admin/accounts/{accountID}/zones/store).
 //
-// WHY manual zone add (not only "Load zones from HE"):
-//   An operator may want to register a single specific zone without triggering
-//   a full browser session that scrapes all zones from dns.he.net. This handler
-//   lets them type the zone name (and optionally the HE numeric zone ID) directly.
-//   If he_zone_id is left empty, Export/Import on the Zones page are disabled
-//   until the operator either enters the ID manually or runs "Load zones from HE".
+// WHY separate from handleAccountLoadZones:
+//   load-zones fetches live data and returns a selection UI without touching the DB.
+//   This handler is the explicit commit step — only the checked zones are submitted,
+//   so the DB reflects the operator's intent rather than the full HE zone list.
 //
-// WHY ON CONFLICT DO UPDATE:
-//   Re-submitting the same zone name is idempotent. If the zone already exists and
-//   the operator provides a non-empty he_zone_id, the ID is updated. If empty,
-//   the existing he_zone_id is preserved (CASE WHEN prevents overwriting with empty).
+// WHY "name|heZoneID" checkbox value encoding:
+//   Each checked checkbox carries both the zone name and HE zone ID in one value,
+//   split on "|". Domain names and numeric IDs never contain "|", so the delimiter
+//   is always safe. Encoding both fields in one value avoids parallel hidden-field
+//   arrays which can de-sync if a user manipulates the DOM.
 //
-// WHY writeZoneError (not http.Error):
-//   http.Error returns 500 which htmx swallows silently — the zones list stays
-//   unchanged and no feedback appears. writeZoneError retargets to the per-account
-//   error div via HX-Retarget + status 200 so htmx actually swaps the error in.
-func handleAccountZoneAdd(db *sql.DB) http.HandlerFunc {
+// WHY ON CONFLICT DO UPDATE (not INSERT OR IGNORE):
+//   An operator may have previously stored a zone without a he_zone_id (via manual add),
+//   then run "Load zones from HE" which returns the numeric ID. Updating on conflict
+//   ensures the he_zone_id is backfilled even if the zone name was already registered.
+func handleAccountZonesStore(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accountID := chi.URLParam(r, "accountID")
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			return
 		}
-
-		// account_id_safe is the sanitized (dot-free) account ID computed in the template,
-		// passed as a hidden field so we can build the correct HX-Retarget CSS selector
-		// without duplicating the sanitization logic in Go.
-		accountIDSafe := r.FormValue("account_id_safe")
-		zoneName := strings.TrimSpace(r.FormValue("zone_name"))
-		heZoneID := strings.TrimSpace(r.FormValue("he_zone_id"))
-
-		writeZoneError := func(msg string) {
-			w.Header().Set("HX-Retarget", "#zone-add-error-"+accountIDSafe)
-			w.Header().Set("HX-Reswap", "innerHTML")
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			// Inline error HTML — no separate template needed for a one-liner.
-			_, _ = fmt.Fprintf(w, `<p class="error-banner" style="margin:0;">%s</p>`, msg)
+		for _, val := range r.Form["zone"] {
+			parts := strings.SplitN(val, "|", 2)
+			name := parts[0]
+			heID := ""
+			if len(parts) == 2 {
+				heID = parts[1]
+			}
+			if _, err := db.ExecContext(r.Context(),
+				`INSERT INTO zones (account_id, name, he_zone_id) VALUES (?, ?, ?)
+				 ON CONFLICT(account_id, name) DO UPDATE SET he_zone_id = excluded.he_zone_id`,
+				accountID, name, heID,
+			); err != nil {
+				http.Error(w, "Failed to save zone: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
-
-		if zoneName == "" {
-			writeZoneError("Zone name is required.")
-			return
-		}
-
-		_, err := db.ExecContext(r.Context(),
-			// CASE WHEN: preserve the existing he_zone_id if the new value is empty.
-			// This prevents overwriting a known zone ID with an empty string when the
-			// operator re-registers a zone they already loaded from HE.
-			`INSERT INTO zones (account_id, name, he_zone_id) VALUES (?, ?, ?)
-			 ON CONFLICT(account_id, name) DO UPDATE
-			 SET he_zone_id = CASE WHEN excluded.he_zone_id != '' THEN excluded.he_zone_id ELSE he_zone_id END`,
-			accountID, zoneName, heZoneID,
-		)
-		if err != nil {
-			writeZoneError("Failed to add zone: " + err.Error())
-			return
-		}
-
 		zones, err := listZonesFromDB(r.Context(), db, accountID)
 		if err != nil {
-			writeZoneError("Zone saved but failed to reload list — refresh the page.")
+			http.Error(w, "Failed to list zones: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		// Clear the error div OOB in case a previous error was showing.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.AccountZonesList(accountID, zones).Render(r.Context(), w)
 	}
 }
+
 
 // handleAccountZoneRemove removes a zone from the DB for one account
 // (DELETE /admin/accounts/{accountID}/zones/{zoneName}).
