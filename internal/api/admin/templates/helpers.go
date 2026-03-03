@@ -6,13 +6,18 @@ import "strings"
 // HTML id attributes AND CSS id selectors used by htmx's hx-target.
 //
 // WHY needed:
-//   Account IDs may contain dots (e.g. "eyodwa.org"). HTML id attributes allow dots,
-//   but CSS id selectors do not — a dot is parsed as a class separator, so
-//   querySelector("#account-zones-eyodwa.org") silently fails to find the element.
+//   Account IDs may contain dots (e.g. "eyodwa.org") and spaces (e.g. "primary - vnovakov").
+//   HTML id attributes forbid spaces entirely. CSS id selectors additionally parse dots
+//   as class separators, so querySelector("#account-zones-eyodwa.org") silently fails.
 //   Sanitizing the ID before embedding it in CSS selectors avoids this without
 //   changing the displayed text (the original ID is always shown to the user).
 //
-// Replacements: . → -, : → -, @ → -, / → -
+//   A space in the hx-target selector is parsed as the CSS descendant combinator, so
+//   hx-target="#account-zones-primary - vnovakov" is a valid but wrong selector —
+//   it looks for an element inside "#account-zones-primary" with class "vnovakov",
+//   finds nothing, and htmx silently does nothing. The button appears to not react at all.
+//
+// Replacements: . → -, : → -, @ → -, / → -, space → -
 func sanitizeHTMLID(s string) string {
-	return strings.NewReplacer(".", "-", ":", "-", "@", "-", "/", "-").Replace(s)
+	return strings.NewReplacer(".", "-", ":", "-", "@", "-", "/", "-", " ", "-").Replace(s)
 }
