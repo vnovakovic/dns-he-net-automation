@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** External systems can manage DNS records on dns.he.net via a REST API as if it were a first-class DNS provider, without any manual web interaction.
-**Current focus:** Phase 6: BIND Import/Export + Admin UI
+**Current focus:** Phase 7: Fix browser automation CSS selector bugs and admin UI user registration
 
 ## Current Position
 
-Phase: 6 of 6 (BIND Import/Export + Admin UI)
-Plan: 4 of 4 in phase 6 (06-04 complete — zones/sync/audit admin UI: zones.templ + sync.templ + audit.templ + all 4 stub handlers replaced + fs.Sub static asset fix)
+Phase: 7 of 7 (Fix browser automation CSS selector bugs and admin UI user registration)
+Plan: 1 of 1 in phase 7 (07-01 complete — 3 CSS selector bugs + admin user registration htmx target bug)
 Status: Complete
-Last activity: 2026-03-01 -- Plan 06-04 complete: zones read-only view, htmx sync trigger with dry-run diff table, paginated audit log, static asset serving fixed via fs.Sub — Phase 6 fully complete
+Last activity: 2026-03-03 -- Phase 7 complete: fixed EditExistingRecord numeric ID selector, SelectorRecordSubmit value constraint, handleBrowserError silent logging, and admin Users empty-table htmx target bug
 
-Progress: [████████████████] 100% (4/4 plans in phase 6)
+Progress: [████████████████] 100% (1/1 plans in phase 7)
 
 ## Performance Metrics
 
@@ -134,6 +134,10 @@ Recent decisions affecting current work:
 - [Phase 06-04]: ZonesPage shows accounts only (empty zonesByAccount map) — browser sessions per account would be too expensive for a read-only informational page
 - [Phase 06-04]: fs.Sub re-roots embed FS at "static/" — without this, FileServer sees "admin.css" but FS root has "static/admin.css", causing 404 for all static assets
 
+### Roadmap Evolution
+
+- Phase 7 added: Fix browser automation CSS selector bugs and admin UI user registration
+
 ### Pending Todos
 
 None.
@@ -145,6 +149,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-01
-Stopped at: Completed 06-04-PLAN.md — Phase 6 fully complete (zones/sync/audit admin UI, all stub handlers replaced, static assets fixed, admin UI verified end-to-end)
+Last session: 2026-03-03
+Stopped at: Completed 07-01-PLAN.md — Phase 7 fully complete (CSS selector bugs fixed, UpdateRecord working, admin user registration fixed)
 Resume file: None

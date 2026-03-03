@@ -139,3 +139,12 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 4. Production Hardening | 4/4 | Complete   | 2026-02-28 |
 | 5. Observability + Sync Engine | 5/5 | Complete   | 2026-02-28 |
 | 6. BIND Import/Export + Admin UI | 4/4 | Complete    | 2026-03-01 |
+
+### Phase 7: Fix browser automation CSS selector bugs and admin UI user registration
+
+**Goal:** [To be planned]
+**Depends on:** Phase 6
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 7 to break down)
