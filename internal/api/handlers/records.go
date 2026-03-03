@@ -649,16 +649,29 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 				return sm.WithAccount(ctx, claims.AccountID, "delete_record_by_name", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 
-					// ListRecords navigates to the zone and returns full record objects
-					// (id, type, name) — no separate ParseRecordRow needed.
-					records, err := zl.ListRecords(zoneID)
+					// WHY NavigateToZoneList before GetZoneName:
+					//   GetZoneName reads img[alt="delete"][value="{zoneID}"] which only
+					//   exists on the zone LIST page (https://dns.he.net/), not on the
+					//   zone EDIT page. Calling GetZoneName after NavigateToZone (edit page)
+					//   always times out — the element is simply not present there.
+					//   Fix: navigate to zone list, read the name, then navigate to zone edit.
+					//
+					// PREVIOUSLY TRIED (both failed):
+					//   1. ListRecords → GetZoneName: timed out (edit page, element absent)
+					//   2. NavigateToZone → GetZoneName immediately: also timed out (same reason)
+					if err := zl.NavigateToZoneList(); err != nil {
+						return err
+					}
+					zoneName, err := zl.GetZoneName(zoneID)
 					if err != nil {
 						return err
 					}
 
-					// GetZoneName reads the zone name from the current page; required by
-					// the deleteRecord JS function that rf.DeleteRecord wraps.
-					zoneName, err := zl.GetZoneName(zoneID)
+					if err := zl.NavigateToZone(zoneID); err != nil {
+						return err
+					}
+
+					rows, err := zl.GetRecordRows()
 					if err != nil {
 						return err
 					}
@@ -666,14 +679,23 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 					// Collect matching records before deleting to avoid mutating the
 					// slice while iterating and to allow logging the full deleted set.
 					var toDelete []model.Record
-					for _, rec := range records {
+					for _, row := range rows {
+						if row.IsLocked {
+							continue
+						}
+						rec, err := zl.ParseRecordRow(row.ID)
+						if err != nil {
+							slog.WarnContext(r.Context(), "skip record row parse error",
+								"row_id", row.ID, "error", err)
+							continue
+						}
 						if !strings.EqualFold(rec.Name, filterName) {
 							continue
 						}
 						if filterType != "" && rec.Type != filterType {
 							continue
 						}
-						toDelete = append(toDelete, rec)
+						toDelete = append(toDelete, *rec)
 					}
 
 					// Delete each matching record. After each deleteRecord JS call the page
@@ -764,6 +786,18 @@ func DeleteRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 				return sm.WithAccount(ctx, claims.AccountID, "delete_record", func(page playwright.Page) error {
 					zl := pages.NewZoneListPage(page)
 
+					// WHY NavigateToZoneList before GetZoneName:
+					//   GetZoneName reads img[alt="delete"][value="{zoneID}"] which only
+					//   exists on the zone LIST page, not on the zone EDIT page.
+					//   Must get the zone name first, then navigate to the edit page.
+					if err := zl.NavigateToZoneList(); err != nil {
+						return err
+					}
+					zoneName, err := zl.GetZoneName(zoneID)
+					if err != nil {
+						return err
+					}
+
 					if err := zl.NavigateToZone(zoneID); err != nil {
 						return err
 					}
@@ -783,12 +817,6 @@ func DeleteRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 					if !found {
 						// Record already gone — 204 is correct per REC-08.
 						return nil
-					}
-
-					// Look up zone name and record type required by DeleteRecord JS call.
-					zoneName, err := zl.GetZoneName(zoneID)
-					if err != nil {
-						return err
 					}
 
 					rec, parseErr := zl.ParseRecordRow(recordID)
