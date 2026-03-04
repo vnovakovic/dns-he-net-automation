@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -89,6 +91,52 @@ func generateDDNSKey() (string, error) {
 		return "", fmt.Errorf("generate DDNS key: %w", err)
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// updateDDNSIP pushes a new IP to HE.net's dynamic DNS update endpoint.
+// Returns the confirmed IP string on success ("good" or "nochg" response).
+//
+// WHY a plain HTTP GET (not browser automation):
+//   dyn.dns.he.net is a simple REST endpoint — no session, no JavaScript,
+//   no CAPTCHA. Using a net/http request is ~100x faster than a Playwright
+//   page navigation and does not consume a browser session slot.
+//
+// WHY called after SetDDNSKey, not before:
+//   The DDNS key must exist on HE.net before the update request can succeed.
+//   SetDDNSKey via browser creates/sets the key; this function uses it immediately.
+//
+// DDNS response codes (dyndns2 protocol, also used by HE.net):
+//
+//	"good <ip>"  — update succeeded, IP is now <ip>
+//	"nochg <ip>" — no change needed, IP was already <ip>
+//	"badauth"    — wrong hostname/password combination
+//	"nohost"     — hostname not found in account
+//	"abuse"      — account flagged for abuse
+//	"dnserr"     — server-side DNS error
+func updateDDNSIP(ctx context.Context, hostname, ddnsKey, myIP string) (string, error) {
+	u := "https://dyn.dns.he.net/nic/update?hostname=" + url.QueryEscape(hostname) +
+		"&password=" + url.QueryEscape(ddnsKey) +
+		"&myip=" + url.QueryEscape(myIP)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", fmt.Errorf("build DDNS update request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("DDNS update request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	line := strings.TrimSpace(string(body))
+
+	if strings.HasPrefix(line, "good ") {
+		return strings.TrimPrefix(line, "good "), nil
+	}
+	if strings.HasPrefix(line, "nochg ") {
+		return strings.TrimPrefix(line, "nochg "), nil
+	}
+	return "", fmt.Errorf("DDNS update rejected: %q", line)
 }
 
 // createRecordRequest extends model.Record with an optional ddns_key.
@@ -434,6 +482,36 @@ func CreateRecord(db *sql.DB, sm *browser.SessionManager, breakers *resilience.B
 		if err != nil {
 			handleBrowserError(w, r, err)
 			return
+		}
+
+		// Auto-update DDNS IP when caller provided content for a dynamic A/AAAA record.
+		// WHY after breakers.Execute (not inside sm.WithAccount):
+		//   updateDDNSIP is a plain HTTP call — it does not need the browser session.
+		//   Releasing the session first means the slot is available for other operations
+		//   while the DDNS HTTP request is in flight.
+		//
+		// WHY only A/AAAA: DDNS updates via dyn.dns.he.net only apply to address records.
+		//   TXT/AFSDB can be marked dynamic but do not support the dyn.dns.he.net protocol.
+		//
+		// WHY ddnsKey != "": for the "existed" path with no key provided, ddnsKey is empty
+		//   and we have no credential to authenticate the DDNS update — skip silently.
+		//
+		// WHY soft failure (Warn, not error): the record WAS created and the DDNS key WAS set.
+		//   The response includes ddns_key so the caller can push the IP manually if needed.
+		if ddnsKey != "" &&
+			rec.Dynamic &&
+			(rec.Type == model.RecordTypeA || rec.Type == model.RecordTypeAAAA) &&
+			rec.Content != "" {
+			updatedIP, ddnsErr := updateDDNSIP(r.Context(), rec.Name, ddnsKey, rec.Content)
+			if ddnsErr != nil {
+				slog.WarnContext(r.Context(), "DDNS IP update failed after record create",
+					"hostname", rec.Name,
+					"requested_ip", rec.Content,
+					"error", ddnsErr,
+				)
+			} else {
+				result.Content = updatedIP
+			}
 		}
 
 		slog.InfoContext(r.Context(), "create record done",

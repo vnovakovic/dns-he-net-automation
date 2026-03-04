@@ -5,16 +5,18 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+	playwright "github.com/playwright-community/playwright-go"
 	"github.com/vnovakov/dns-he-net-automation/internal/api"
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/config"
@@ -26,12 +28,56 @@ import (
 )
 
 func main() {
+	// DIAGNOSTIC: Write a startup trace before any config/slog setup.
+	// This file always gets written when the binary starts, even in service mode where
+	// stdout is /dev/null. Reading it after a crash reveals exactly how far we got.
+	// Remove after the service startup issue is resolved.
+	writeEarlyDebug("main() started")
+	defer writeEarlyDebug("main() exiting")
+
+	// Load .env file before anything else so all subsequent config reads see its values.
+	// Variables already set in the process environment take precedence (godotenv.Load semantics).
+	loadEnvFile()
+	writeEarlyDebug("loadEnvFile done")
+
 	// Bootstrap subcommand: "./server token create --account <id> --role <role>"
 	// Issues an admin/viewer token directly to stdout without going through the HTTP API.
 	// This solves the chicken-and-egg: the first token must be created before any API call.
 	// Usage: HE_ACCOUNTS=dummy JWT_SECRET=... DB_PATH=... ./server token create --account prod --role admin
 	if len(os.Args) >= 2 && os.Args[1] == "token" {
 		runTokenCreate()
+		return
+	}
+
+	// playwright-install subcommand: pre-installs Playwright browser binaries.
+	// Required for Windows service deployments where the service account (LocalSystem)
+	// does not have access to the installing user's %LOCALAPPDATA%\ms-playwright.
+	//
+	// Usage (run as Administrator from install dir):
+	//   PLAYWRIGHT_BROWSERS_PATH="C:\Program Files\dnshenet-server\browsers" dnshenet-server.exe playwright-install
+	//
+	// WHY a subcommand instead of auto-install on first start:
+	//   playwright.Run() downloads browsers (~200 MB) on first run if they are not found.
+	//   In service mode this blocks main() for minutes and causes SCM Error 1053.
+	//   Running playwright-install once during setup avoids this delay at service start.
+	if len(os.Args) >= 2 && os.Args[1] == "playwright-install" {
+		fmt.Println("Installing Playwright browser binaries...")
+		// WHY pass DriverDirectory when PLAYWRIGHT_DRIVER_PATH is set:
+		//   The installer runs this subcommand as the admin user with PLAYWRIGHT_DRIVER_PATH
+		//   pointing to the install dir (e.g. C:\Program Files\dnshenet-server\driver).
+		//   Without DriverDirectory the driver would land in the admin user's %LOCALAPPDATA%
+		//   which the LocalSystem service account cannot access → "driver not found" on first start.
+		//   Passing the same fixed path here and in NewLauncher() keeps the driver in one
+		//   location reachable by both the installer context and the running service.
+		var installOpts []*playwright.RunOptions
+		if driverDir := os.Getenv("PLAYWRIGHT_DRIVER_PATH"); driverDir != "" {
+			installOpts = append(installOpts, &playwright.RunOptions{DriverDirectory: driverDir})
+		}
+		if err := playwright.Install(installOpts...); err != nil {
+			fmt.Fprintf(os.Stderr, "error: playwright install: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Done.")
 		return
 	}
 
@@ -43,24 +89,47 @@ func main() {
 		os.Exit(1)
 	}
 
+	writeEarlyDebug("config loaded: port=" + fmt.Sprint(cfg.Port) + " logfile=" + cfg.LogFile)
+
 	// Configure structured JSON logging based on LogLevel (OPS-03).
 	level, err := parseLogLevel(cfg.LogLevel)
 	if err != nil {
 		slog.Error("invalid LOG_LEVEL", "value", cfg.LogLevel, "error", err)
 		os.Exit(1)
 	}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	// WHY io.MultiWriter when LOG_FILE is set:
+	//   Windows services have stdout/stderr redirected to /dev/null — all slog output
+	//   is silently dropped. LOG_FILE lets an operator set a file path via the service
+	//   registry Environment (LOG_FILE=C:\dnshenet-service.log) to capture startup
+	//   errors that would otherwise be invisible. Without LOG_FILE, logs go to stdout
+	//   only (unchanged behaviour for interactive / Docker / systemd deployments).
+	var logDest io.Writer = os.Stdout
+	if cfg.LogFile != "" {
+		f, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: cannot open log file %q: %v\n", cfg.LogFile, err)
+		} else {
+			defer f.Close()
+			logDest = io.MultiWriter(os.Stdout, f)
+		}
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logDest, &slog.HandlerOptions{
 		Level: level,
 	})))
 
 	// SECURITY: Never log cfg.JWTSecret, cfg.HEAccountsJSON, or any credential value.
 	// OPS-02 requires structured fields; SEC-01/SEC-02 prohibit credential exposure.
+	envFile := os.Getenv("ENV_FILE")
+	if envFile == "" {
+		envFile = ".env"
+	}
 	slog.Info("service starting",
 		"port", cfg.Port,
 		"db_path", cfg.DBPath,
 		"headless", cfg.PlaywrightHeadless,
 		"slow_mo", cfg.PlaywrightSlowMo,
 		"log_level", cfg.LogLevel,
+		"env_file", envFile,
 	)
 
 	// Initialize SQLite database with WAL mode and migrations (OPS-06, REL-01).
@@ -133,12 +202,42 @@ func main() {
 	// prometheus.DefaultRegisterer (custom registry pattern — avoids test panics).
 	reg := metrics.NewRegistry()
 
+	writeEarlyDebug("db opened, about to call makeShutdownCtx")
+
+	// Set up shutdown context BEFORE browser launch.
+	//
+	// WHY here (before browser.NewLauncher), not after all initialisation:
+	//   When running as a Windows service, makeShutdownCtx() starts svc.Run() in a
+	//   goroutine which registers with the SCM and immediately reports StartPending →
+	//   Running. The SCM timeout (default 180 s on this machine) starts counting from
+	//   the moment the service process starts. browser.NewLauncher() calls
+	//   playwright.Run() which can take 10-30 s (driver unpack + Chromium launch).
+	//   If PLAYWRIGHT_BROWSERS_PATH is wrong or browsers are missing it can block for
+	//   the full 180 s timeout → SCM kills the process → Error 1053 before we ever
+	//   reach svc.Run(). Registering with the SCM first means any subsequent failure
+	//   produces a more informative error (service stopped unexpectedly / Event Log
+	//   shows the actual Go error) instead of a generic timeout.
+	//
+	// PREVIOUSLY: makeShutdownCtx() was called after all initialisation, which caused
+	//   Error 1053 every time the service was started because svc.Run() was never reached
+	//   within the 180-second SCM timeout.
+	ctx, stop := makeShutdownCtx()
+	defer stop()
+
+	writeEarlyDebug("makeShutdownCtx returned (SCM registered), about to launch browser")
+	writeEarlyDebug("PLAYWRIGHT_BROWSERS_PATH=" + os.Getenv("PLAYWRIGHT_BROWSERS_PATH"))
+	writeEarlyDebug("PLAYWRIGHT_HEADLESS=" + fmt.Sprint(cfg.PlaywrightHeadless))
+
 	// Initialize Playwright browser launcher (BROWSER-01).
-	launcher, err := browser.NewLauncher(cfg.PlaywrightHeadless, cfg.PlaywrightSlowMo)
+	// Pass PlaywrightDriverPath so LocalSystem can find the driver installed during setup.
+	// See config.PlaywrightDriverPath and browser.NewLauncher comments for full rationale.
+	launcher, err := browser.NewLauncher(cfg.PlaywrightHeadless, cfg.PlaywrightSlowMo, cfg.PlaywrightDriverPath)
 	if err != nil {
+		writeEarlyDebug("browser.NewLauncher ERROR: " + err.Error())
 		slog.Error("failed to launch browser", "error", err)
 		os.Exit(1)
 	}
+	writeEarlyDebug("browser launched OK")
 	// Close browser BEFORE the signal wait so defer executes on both normal exit and signal.
 	defer launcher.Close()
 
@@ -176,10 +275,6 @@ func main() {
 		vaultHealthFn = func() string { return "disabled" }
 	}
 
-	// Set up OS signal handling for graceful shutdown (SIGTERM for Docker/k8s, SIGINT for Ctrl+C).
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
-
 	// Wire chi router and start HTTP server (Phase 2).
 	// Admin UI credentials are passed here and threaded into RegisterAdminRoutes.
 	// This is the SINGLE point where admin config enters the router — plans 03 and 04
@@ -187,19 +282,49 @@ func main() {
 	handler := api.NewRouter(db, sm, launcher, []byte(cfg.JWTSecret), breakers,
 		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn, reg,
 		cfg.AdminUsername, cfg.AdminPassword, cfg.AdminSessionKey)
+
+	// WHY tls.Config instead of relying on ListenAndServeTLS defaults:
+	//   Go's default TLS config allows TLS 1.0/1.1 for broader compatibility, but those
+	//   versions have known vulnerabilities (BEAST, POODLE). Setting MinVersion = TLS12
+	//   drops support for < TLS 1.2 while retaining TLS 1.3 (which Go also supports).
+	//   TLS 1.2 is the minimum accepted by PCI-DSS, NIST SP 800-52r2, and most modern
+	//   security scanners. Go's stdlib TLS 1.2 implementation enables AEAD ciphers
+	//   (AES-GCM, ChaCha20-Poly1305) by default — no manual cipher list needed.
+	//
+	// WHY optional TLS (fall back to HTTP when SSL_CERT / SSL_KEY are not set):
+	//   Allows plain HTTP for local dev and for deployments where TLS is terminated by
+	//   an upstream reverse proxy (nginx, Traefik, AWS ALB). Forcing TLS in those setups
+	//   would require clients to bypass the proxy, defeating its purpose.
+	//
+	// SECURITY: Never log cfg.SSLKey (private key path reveals the key location;
+	//   its contents must never appear in logs under any circumstances).
+	tlsEnabled := cfg.SSLCert != "" && cfg.SSLKey != ""
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: handler,
 	}
+	if tlsEnabled {
+		srv.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+	}
 
 	go func() {
-		slog.Info("http server listening", "port", cfg.Port)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			// errors.Is(err, http.ErrServerClosed) is required:
-			// srv.Shutdown() causes ListenAndServe to return this sentinel value.
-			// Without this check, the server logs a spurious fatal error on graceful shutdown (research pitfall #5).
-			slog.Error("http server error", "error", err)
-			os.Exit(1)
+		if tlsEnabled {
+			slog.Info("https server listening", "port", cfg.Port, "tls_min_version", "TLS1.2", "cert", cfg.SSLCert)
+			if err := srv.ListenAndServeTLS(cfg.SSLCert, cfg.SSLKey); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("https server error", "error", err)
+				os.Exit(1)
+			}
+		} else {
+			slog.Info("http server listening", "port", cfg.Port)
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				// errors.Is(err, http.ErrServerClosed) is required:
+				// srv.Shutdown() causes ListenAndServe to return this sentinel value.
+				// Without this check, the server logs a spurious fatal error on graceful shutdown (research pitfall #5).
+				slog.Error("http server error", "error", err)
+				os.Exit(1)
+			}
 		}
 	}()
 
@@ -267,6 +392,9 @@ func main() {
 // Note: HE_ACCOUNTS can be set to any non-empty value (e.g., "dummy") since this subcommand
 // only touches the DB and JWT signing — browser/credential functionality is not used.
 func runTokenCreate() {
+	// Load .env file so token create works without manually exporting every variable.
+	loadEnvFile()
+
 	// Parse flags: --account, --role, --label, --expires-in-days
 	// os.Args layout: [binary, "token", "create", --account, ..., --role, ...]
 	// We skip "create" (os.Args[2]) and parse from os.Args[3:].
@@ -325,6 +453,48 @@ func runTokenCreate() {
 	fmt.Printf("  JTI:   %s\n", jti)
 	fmt.Printf("  Role:  %s\n", *role)
 	fmt.Printf("  Token: %s\n", rawToken)
+}
+
+// loadEnvFile loads environment variables from a .env file without overwriting
+// variables that are already set in the process environment.
+//
+// WHY godotenv.Load (not Overload):
+//   Load() skips keys that are already present in the environment, so explicitly
+//   set env vars (e.g. from a Docker/k8s secret, CI pipeline, or shell export) always
+//   win over .env file values. This matches the 12-factor app convention: runtime
+//   environment has higher precedence than config files.
+//
+// WHY ENV_FILE override:
+//   Different deployment environments (dev, staging, prod) may store the config at
+//   different paths. ENV_FILE lets the operator point to any file without changing code.
+//   If ENV_FILE is not set, the default ".env" in the working directory is tried.
+//
+// WHY silent on missing file (os.IsNotExist):
+//   .env is optional — deployments that inject all vars via the environment (Docker,
+//   systemd EnvironmentFile, k8s envFrom) should not fail just because no .env exists.
+//   Any other error (permission denied, malformed file) is still logged as a warning
+//   so the operator knows something unexpected happened.
+func loadEnvFile() {
+	path := os.Getenv("ENV_FILE")
+	if path == "" {
+		path = ".env"
+	}
+	if err := godotenv.Load(path); err != nil && !os.IsNotExist(err) {
+		// Use basic stderr output — slog is not yet configured at this point.
+		fmt.Fprintf(os.Stderr, "warning: could not load env file %q: %v\n", path, err)
+	}
+}
+
+// writeEarlyDebug appends a timestamped message to C:\dnshenet-early.log.
+// Used for diagnosing service startup failures before slog is configured.
+// Remove once the service starts reliably.
+func writeEarlyDebug(msg string) {
+	f, err := os.OpenFile(`C:\dnshenet-early.log`, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "[%s] pid=%d %s\n", time.Now().Format(time.RFC3339), os.Getpid(), msg)
 }
 
 // parseLogLevel converts a log level string to the corresponding slog.Level.

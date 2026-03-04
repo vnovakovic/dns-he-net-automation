@@ -35,6 +35,26 @@ type Config struct {
 	// PlaywrightSlowMo adds a delay (in ms) between Playwright actions for debugging (default: 0).
 	PlaywrightSlowMo float64 `env:"PLAYWRIGHT_SLOW_MO" envDefault:"0"`
 
+	// PlaywrightDriverPath is the directory where the Playwright driver binary is stored.
+	// When empty, playwright-go uses os.UserCacheDir()/ms-playwright-go/<version> which
+	// differs between the installing user and the LocalSystem service account → driver not found.
+	//
+	// WHY needed for Windows service installs:
+	//   playwright.Install() (run by the installer as the admin user) stores the driver in
+	//   %LOCALAPPDATA%\ms-playwright-go\1.57.0 (e.g. C:\Users\vladimir\AppData\Local\...).
+	//   When the service runs as LocalSystem, os.UserCacheDir() resolves to
+	//   C:\Windows\System32\config\systemprofile\AppData\Local — a completely different
+	//   directory. playwright.Run() cannot find the driver → "please install the driver first".
+	//
+	// FIX: set PLAYWRIGHT_DRIVER_PATH=C:\Program Files\dnshenet-server\driver in the
+	//   service registry environment (same technique already used for PLAYWRIGHT_BROWSERS_PATH).
+	//   The installer passes the same path to playwright-install so the driver lands where
+	//   LocalSystem can find it regardless of which user account ran the installer.
+	//
+	// PREVIOUSLY: driver installed to %LOCALAPPDATA%\ms-playwright-go\1.57.0 (user profile).
+	//   Service (LocalSystem) looked in systemprofile\AppData → not found → Error 1053.
+	PlaywrightDriverPath string `env:"PLAYWRIGHT_DRIVER_PATH"`
+
 	// OperationTimeoutSec is the per-operation browser timeout in seconds (default: 30).
 	OperationTimeoutSec int `env:"OPERATION_TIMEOUT_SEC" envDefault:"30"`
 
@@ -82,6 +102,20 @@ type Config struct {
 
 	// Maximum inter-operation delay for jitter (BROWSER-08)
 	MaxOperationDelaySec float64 `env:"MAX_OPERATION_DELAY_SEC" envDefault:"3.0"`
+
+	// LogFile is an optional path to a log file. When set, slog writes to both
+	// stdout AND the file — useful for Windows service mode where stdout is /dev/null.
+	// Set LOG_FILE=C:\dnshenet-service.log in the service registry Environment to
+	// capture startup errors that would otherwise be invisible.
+	LogFile string `env:"LOG_FILE"`
+
+	// TLS configuration.
+	// When both SSLCert and SSLKey are set, the server listens on HTTPS with TLS 1.2+.
+	// When either is empty the server falls back to plain HTTP (useful for local dev or
+	// when TLS is terminated upstream by a reverse proxy).
+	// SECURITY: SSLKey is a private key path — never log its contents.
+	SSLCert string `env:"SSL_CERT"` // path to PEM-encoded certificate (or chain)
+	SSLKey  string `env:"SSL_KEY"`  // path to PEM-encoded private key
 
 	// Admin UI authentication (UI-04).
 	// Both AdminUsername and AdminPassword are required when the admin UI is accessed.

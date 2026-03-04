@@ -384,6 +384,32 @@ func (zp *ZoneListPage) ParseRecordRow(rowID string) (*model.Record, error) {
 		Dynamic:  dynamic,
 	}
 
+	// TXT records: HE.net wraps the content in double-quotes in the table row
+	// (zone-file convention, e.g., "this is test"). Strip them so the stored
+	// content matches what callers submit and expect.
+	//
+	// WHY strip here (not in recordsMatch or the handler):
+	//   ParseRecordRow is the single source of truth for scraped content.
+	//   Normalising here means ListRecords, GetRecord, FindRecord (post-create
+	//   lookup), and CreateRecord responses all return unquoted TXT content.
+	//
+	// WHY only strip when BOTH sides are quotes (not strings.Trim):
+	//   Multi-chunk TXT like "chunk1" "chunk2" would become chunk1" "chunk2 with
+	//   Trim. Checking both ends ensures we only unwrap fully-quoted values.
+	//
+	// PREVIOUSLY: without stripping, FindRecord's post-create content comparison
+	//   always failed for TXT records:
+	//     strings.EqualFold("\"this is test\"", "this is test") == false
+	//   → "could not find newly created record after submission" → browser_error
+	//   despite the record being visible on dns.he.net.
+	//   DISCOVERED: 2026-03-04 via user report.
+	if rec.Type == model.RecordTypeTXT &&
+		len(rec.Content) >= 2 &&
+		rec.Content[0] == '"' &&
+		rec.Content[len(rec.Content)-1] == '"' {
+		rec.Content = rec.Content[1 : len(rec.Content)-1]
+	}
+
 	// SRV records: content field holds "Weight Port Target" space-separated.
 	if rec.Type == model.RecordTypeSRV {
 		parts := strings.Fields(content)
