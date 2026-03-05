@@ -19,32 +19,166 @@
 #   The runner log showed "No URL provided, cache will not be downloaded from shared
 #   cache server" — the shared cache server is not configured for this runner.
 #   Keeping a cache stanza that does nothing just adds noise and a slow cache-check step.
-
-stages:
-  - build
-  - test
-  - cleanup
-
+#
 # WHY include runner-cleanup.yml:
 #   GitLab's "Run pipeline" UI and API always use the project's configured CI config
 #   path (.gitlab-ci.yml) — there is no per-trigger config override. Including the
 #   cleanup file here makes the manual cleanup job available in every pipeline without
 #   requiring a project-settings change. The job runs only when manually triggered
 #   (when: manual) so it never fires during normal build/test runs.
+#
+# VERSION RESOLUTION (shared across build/package jobs via .resolve-version anchor):
+#   1. If $VERSION CI variable is set manually → use as-is (allows ad-hoc builds)
+#   2. Else if $CI_COMMIT_TAG matches v* → strip leading 'v' (v1.2.0 → 1.2.0)
+#   3. Else → read VERSION file + append -$CI_COMMIT_SHORT_SHA (dev build, e.g. 0.1.0-abc1234)
+#   This strategy means release builds are clean semver, dev builds are traceable to a commit.
+
 include:
   - local: .gitlab/ci/runner-cleanup.yml
 
-variables:
-  GOMODCACHE: /tmp/gomod
+stages:
+  - build
+  - test
+  - package
+  - cleanup
 
-build:
+# ── Shared version-resolution script fragment ───────────────────────────────
+#
+# WHY YAML anchor (not a before_script at top level):
+#   A top-level before_script runs for ALL jobs including runner-cleanup.yml jobs
+#   that don't need versioning. Anchors let us opt in only where needed.
+#
+# WHY export (not just assignment):
+#   GitLab CI runs each script line in a new shell unless they share the same
+#   `script:` block. `export VERSION=...` ensures downstream script lines within
+#   the same job can read the variable.
+.resolve-version: &resolve-version
+  - |
+    if [ -z "$VERSION" ]; then
+      if echo "$CI_COMMIT_TAG" | grep -qE '^v[0-9]'; then
+        VERSION=$(echo "$CI_COMMIT_TAG" | sed 's/^v//')
+      else
+        VERSION=$(cat VERSION)-$CI_COMMIT_SHORT_SHA
+      fi
+    fi
+    export VERSION
+  - echo "Building version $VERSION"
+
+# ── Build stage ─────────────────────────────────────────────────────────────
+
+build-linux:
   stage: build
   image: golang:1.25
+  variables:
+    GOMODCACHE: /tmp/gomod
+    GOOS: linux
+    GOARCH: amd64
+    CGO_ENABLED: "0"
+  before_script:
+    - *resolve-version
   script:
-    - go build ./...
+    - go build -o dnshenet-server-linux-amd64 ./cmd/server
+  artifacts:
+    paths:
+      - dnshenet-server-linux-amd64
+    expire_in: 1 hour
+
+build-windows:
+  stage: build
+  image: golang:1.25
+  variables:
+    GOMODCACHE: /tmp/gomod
+    GOOS: windows
+    GOARCH: amd64
+    CGO_ENABLED: "0"
+  before_script:
+    - *resolve-version
+  script:
+    - go build -o dnshenet-server-windows-amd64.exe ./cmd/server
+  artifacts:
+    paths:
+      - dnshenet-server-windows-amd64.exe
+    expire_in: 1 hour
+
+# ── Test stage ───────────────────────────────────────────────────────────────
 
 test:
   stage: test
   image: golang:1.25
+  variables:
+    GOMODCACHE: /tmp/gomod
   script:
     - go test ./...
+
+# ── Package stage ────────────────────────────────────────────────────────────
+
+# WHY package-installer uses amake/innosetup:
+#   amake/innosetup is a pre-built Docker Hub image containing Wine + Inno Setup 6
+#   (ISCC.exe) in headless CLI mode. No X11 display is required — Wine runs the
+#   Windows compiler via the CLI entry point without any GUI surface.
+#
+# WHY /DMyAppVersion=... passed to ISCC:
+#   The .iss script uses #ifdef MyAppVersion to set AppVersion, defaulting to "dev"
+#   for local builds. Passing the define from CI injects the resolved semver into
+#   the installer so Programs & Features shows the correct version string.
+#
+# WHY rules trigger on tag OR master OR $VERSION set:
+#   - Tags: release builds that should always produce a versioned artifact
+#   - master: integration builds to catch regressions before tagging
+#   - $VERSION set: allows ad-hoc builds from "Run pipeline" UI with a custom version
+package-installer:
+  stage: package
+  image: amake/innosetup
+  needs:
+    - build-windows
+  before_script:
+    - *resolve-version
+  script:
+    # Rename to the filename expected by the .iss [Files] section
+    - cp dnshenet-server-windows-amd64.exe dnshenet-server.exe
+    - ISCC.exe /DMyAppVersion=$VERSION installer/dnshenet-server.iss
+  artifacts:
+    name: "dnshenet-server-installer-$VERSION"
+    paths:
+      - dnshenet-server-installer.exe
+    expire_in: 7 days
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$VERSION'
+
+# WHY package-docker uses host Docker socket (unix:///var/run/docker.sock):
+#   The runner on dus-runner01 mounts the host Docker socket rather than using
+#   Docker-in-Docker (dind). This was confirmed working by the existing cleanup job.
+#   DinD requires privileged mode and is slower; host socket reuse is the proven approach.
+#
+# WHY :latest is only pushed on master or tag (not every branch):
+#   :latest should always point to the most recent stable/integration build.
+#   Pushing :latest from feature branches would cause it to point to unreviewed code,
+#   breaking anyone who pulls :latest expecting a stable image.
+#
+# WHY $HARBOR_USERNAME / $HARBOR_PASSWORD (not hardcoded):
+#   Credentials are stored as protected+masked GitLab CI variables so they never
+#   appear in job logs or the repository. Set them in:
+#   Project → Settings → CI/CD → Variables
+package-docker:
+  stage: package
+  image: docker:25
+  variables:
+    DOCKER_HOST: unix:///var/run/docker.sock
+    IMAGE: harbor.e2.network/provision/dns-he-net-automation
+  before_script:
+    - *resolve-version
+  script:
+    - docker login -u "$HARBOR_USERNAME" -p "$HARBOR_PASSWORD" harbor.e2.network
+    - docker build -t $IMAGE:$VERSION .
+    - docker push $IMAGE:$VERSION
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "master" ] || [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag $IMAGE:$VERSION $IMAGE:latest
+        docker push $IMAGE:latest
+      fi
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$VERSION'

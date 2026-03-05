@@ -2,6 +2,11 @@
 /server
 /server.exe
 /bin/
+# CI-produced and local build artifacts (binaries + installer)
+/dnshenet-server.exe
+/dnshenet-server-linux-amd64
+/dnshenet-server-windows-amd64.exe
+/dnshenet-server-installer.exe
 
 # MCP tool directories and logs
 .playwright-mcp/
@@ -15,6 +20,14 @@ alarm-mcp.log
 # Environment files (contain credentials)
 .env
 .env.*
+
+# TLS certificates and private keys (self-signed dev certs — never commit keys)
+/server.crt
+/server.key
+
+# Debug / development artifacts
+debug-*.html
+/screenshots/
 
 # Editor / OS
 .DS_Store

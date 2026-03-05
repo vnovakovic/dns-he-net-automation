@@ -19,9 +19,21 @@
 ;   3. Remove the Programs & Features entry
 ;   4. KEEP C:\dnshenet-server.env  (contains credentials — operator deletes manually)
 
+; WHY injectable AppVersion via ISCC define (not hardcoded):
+;   CI passes the resolved semver via: ISCC.exe /DMyAppVersion=1.2.3 ...
+;   This embeds the version string in Programs & Features and the installer
+;   filename without requiring manual edits to this file before each release.
+;   Local / dev builds that don't pass /DMyAppVersion get "dev" as a safe default.
+;
+; DEPENDENCY: the CI job in .gitlab-ci.yml must pass /DMyAppVersion=$VERSION
+;   to ISCC.exe. If that flag is omitted, the installer shows "dev" as its version.
+#ifndef MyAppVersion
+  #define MyAppVersion "dev"
+#endif
+
 [Setup]
 AppName=DNS HE.NET Automation
-AppVersion=1.0
+AppVersion={#MyAppVersion}
 AppPublisher=dns-he-net-automation
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 DefaultDirName={autopf}\dnshenet-server
