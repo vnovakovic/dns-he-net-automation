@@ -20,6 +20,11 @@ alarm-mcp.log
 # Environment files (contain credentials)
 .env
 .env.*
+# WHY exception for .env.example: it is a credential-free template committed to the
+# repo so the Inno Setup installer (installer/dnshenet-server.iss) can bundle it and
+# copy it to C:\dnshenet-server.env on first install. Without this exception, the
+# .env.* glob above would exclude it from being tracked.
+!.env.example
 
 # TLS certificates and private keys (self-signed dev certs — never commit keys)
 /server.crt
