@@ -149,7 +149,10 @@ package-installer:
   script:
     # Rename to the filename expected by the .iss [Files] section
     - cp dnshenet-server-windows-amd64.exe dnshenet-server.exe
-    - ISCC.exe /DMyAppVersion=$VERSION installer/dnshenet-server.iss
+    # WHY "iscc" not "ISCC.exe": amake/innosetup ENTRYPOINT is the shell script
+    # "iscc" (lowercase, no .exe) in /usr/local/bin. With entrypoint:[""] the
+    # shell needs to call it by its actual Linux name.
+    - iscc /DMyAppVersion=$VERSION installer/dnshenet-server.iss
   artifacts:
     name: "dnshenet-server-installer-$VERSION"
     paths:
