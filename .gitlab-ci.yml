@@ -117,6 +117,17 @@ test:
 #   (ISCC.exe) in headless CLI mode. No X11 display is required — Wine runs the
 #   Windows compiler via the CLI entry point without any GUI surface.
 #
+# WHY entrypoint: [""] on amake/innosetup:
+#   The image sets ENTRYPOINT ["ISCC.exe"], so without an override GitLab CI's
+#   before_script shell commands (the version-resolve anchor) get passed as
+#   arguments to ISCC.exe, which rejects them with "Unknown option: -c".
+#   Resetting the entrypoint to empty lets the default shell run, and ISCC.exe
+#   is still available in PATH via the Wine wrapper script bundled in the image.
+#
+# PREVIOUSLY TRIED: image: amake/innosetup (no entrypoint override)
+#   Pipeline failed: ISCC.exe received the bash -c "..." fragment as its first
+#   argument and exited with "Unknown option: -c". Discovered from job trace.
+#
 # WHY /DMyAppVersion=... passed to ISCC:
 #   The .iss script uses #ifdef MyAppVersion to set AppVersion, defaulting to "dev"
 #   for local builds. Passing the define from CI injects the resolved semver into
@@ -128,7 +139,9 @@ test:
 #   - $VERSION set: allows ad-hoc builds from "Run pipeline" UI with a custom version
 package-installer:
   stage: package
-  image: amake/innosetup
+  image:
+    name: amake/innosetup
+    entrypoint: [""]
   needs:
     - build-windows
   before_script:
