@@ -143,6 +143,11 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 			r.With(middleware.RequireAdmin).Delete("/{zoneID}", handlers.DeleteZone(db, sm, breakers))
 
 			r.Route("/{zoneID}", func(r chi.Router) {
+				// Zone-scoped token enforcement: reject tokens bound to a different zone.
+				// Account-wide tokens (ZoneID=="") pass through without restriction.
+				// DEPENDENCY: must come after BearerAuth (needs claims in context).
+				r.Use(middleware.RequireZoneAccess)
+
 				r.With(middleware.RequireAdmin).Post("/sync", handlers.SyncRecords(db, sm, breakers, reg))
 				// BIND export/import routes (BIND-01, BIND-02, BIND-03).
 				// GET /export: scrapes live records and returns BIND zone file (text/plain, attachment).

@@ -528,8 +528,18 @@ func handleTokensForAccount(db *sql.DB, recoveryEnabled bool) http.HandlerFunc {
 			http.Error(w, "Failed to list tokens", http.StatusInternalServerError)
 			return
 		}
+		// Load zones for the zone-scope dropdown in IssueTokenForm.
+		// WHY pass zones here (not load on demand via separate htmx call):
+		//   The IssueTokenForm is rendered inline as part of TokensForAccount — a separate
+		//   htmx call for zones would require a second round-trip. Loading them in the same
+		//   handler keeps the form self-contained.
+		zones, err := listZonesFromDB(r.Context(), db, accountID)
+		if err != nil {
+			// Non-fatal: render form without zone dropdown rather than failing the page.
+			zones = nil
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = templates.TokensForAccount(accountID, tokens).Render(r.Context(), w)
+		_ = templates.TokensForAccount(accountID, tokens, zones).Render(r.Context(), w)
 	}
 }
 
@@ -555,8 +565,27 @@ func handleTokenIssue(db *sql.DB, jwtSecret []byte, recoveryKey *[32]byte) http.
 		if role == "" {
 			role = "viewer"
 		}
+		// zone_id is the numeric HE zone ID selected from the dropdown.
+		// Empty = account-wide token. Non-empty = zone-scoped.
+		// WHY look up zone_name from DB (not submitted as a form field):
+		//   The form only sends zone_id (select value). zone_name is looked up from the
+		//   zones table here to avoid trusting user-submitted domain name strings.
+		zoneID := r.FormValue("zone_id")
+		zoneName := ""
+		if zoneID != "" {
+			// Look up the zone name for the prefix. Non-fatal if not found — the token
+			// is still issued; the prefix will omit the zone segment.
+			var name sql.NullString
+			_ = db.QueryRowContext(r.Context(),
+				`SELECT name FROM zones WHERE account_id = ? AND he_zone_id = ?`,
+				accountID, zoneID,
+			).Scan(&name)
+			if name.Valid {
+				zoneName = name.String
+			}
+		}
 
-		rawJWT, jti, err := token.IssueToken(r.Context(), db, accountID, role, label, 0, jwtSecret, recoveryKey)
+		rawJWT, jti, err := token.IssueToken(r.Context(), db, accountID, role, label, zoneID, zoneName, 0, jwtSecret, recoveryKey)
 		if err != nil {
 			http.Error(w, "Failed to issue token: "+err.Error(), http.StatusInternalServerError)
 			return

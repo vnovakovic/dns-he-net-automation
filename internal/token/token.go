@@ -109,10 +109,18 @@ func decryptToken(encoded string, key [32]byte) (string, error) {
 
 // Claims is the JWT payload for dns-he-net-automation bearer tokens.
 // Embeds jwt.RegisteredClaims which provides: ID (jti), ExpiresAt, IssuedAt.
+//
+// Zone scope:
+//   ZoneID is the numeric HE zone ID (he_zone_id) that this token is restricted to.
+//   When empty, the token is account-wide (access to all zones under AccountID).
+//   ZoneName is the human-readable domain name (e.g. "example.com") used in the prefix only;
+//   enforcement is always done via ZoneID (never ZoneName) in RequireZoneAccess middleware.
 type Claims struct {
 	AccountID string `json:"account_id"`
 	Role      string `json:"role"` // "admin" or "viewer"
 	Label     string `json:"label,omitempty"`
+	ZoneID    string `json:"zone_id,omitempty"`   // numeric HE zone ID; empty = account-wide
+	ZoneName  string `json:"zone_name,omitempty"` // domain name for display only (e.g. "example.com")
 	jwt.RegisteredClaims
 }
 
@@ -123,11 +131,15 @@ type Claims struct {
 // It is used by the admin UI to decide whether to show the "Show token" button on each row.
 // When false (either the flag is off, or the token was issued before the flag was turned on),
 // the reveal endpoint will return 403 even if called directly.
+//
+// ZoneID / ZoneName are nil for account-wide tokens (added in migration 009).
 type TokenRecord struct {
 	JTI         string     `json:"jti"`
 	AccountID   string     `json:"account_id"`
 	Role        string     `json:"role"`
 	Label       *string    `json:"label,omitempty"`
+	ZoneID      *string    `json:"zone_id,omitempty"`
+	ZoneName    *string    `json:"zone_name,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
@@ -148,6 +160,12 @@ func hashToken(rawToken string) string {
 //   - accountID: the account this token belongs to (must exist in the accounts table)
 //   - role: must be "admin" or "viewer" (TOKEN-03)
 //   - label: optional human-readable label (may be empty string)
+//   - zoneID: optional numeric HE zone ID to scope the token to a single zone.
+//     Empty string = account-wide token (access to all zones under accountID).
+//     The middleware RequireZoneAccess enforces this restriction on each request.
+//   - zoneName: human-readable domain name for the token prefix and admin UI display.
+//     Must match the zones table for the given zoneID. Not used for enforcement.
+//     May be empty even when zoneID is non-empty (prefix will omit the zone segment).
 //   - expiresInDays: number of days until expiry; 0 means no expiry (TOKEN-04)
 //   - secret: HMAC-SHA256 signing key (should be at least 32 bytes)
 //   - recoveryKey: when non-nil, the raw token is encrypted with AES-256-GCM and stored
@@ -157,7 +175,7 @@ func hashToken(rawToken string) string {
 //
 // The returned rawToken is shown to the user once. It is NOT stored in plaintext — only
 // the SHA-256 hash is always persisted; the encrypted form is stored only when recoveryKey != nil.
-func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, expiresInDays int, secret []byte, recoveryKey *[32]byte) (rawToken string, jti string, err error) {
+func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label, zoneID, zoneName string, expiresInDays int, secret []byte, recoveryKey *[32]byte) (rawToken string, jti string, err error) {
 	// Validate role against the allowed set (TOKEN-03).
 	if role != "admin" && role != "viewer" {
 		return "", "", fmt.Errorf("invalid role %q: must be \"admin\" or \"viewer\"", role)
@@ -187,6 +205,8 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 		AccountID: accountID,
 		Role:      role,
 		Label:     label,
+		ZoneID:    zoneID,
+		ZoneName:  zoneName,
 		RegisteredClaims: registered,
 	}
 
@@ -198,14 +218,16 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 
 	// Build the full token string with a human-readable prefix.
 	//
-	// Format: dns-he-net.{accountID}.{role}--{jti}.{jwt}
+	// Account-wide token format:  dns-he-net.{accountID}.{role}--{jti}.{jwt}
+	// Zone-scoped token format:   dns-he-net.{accountID}.{zoneName}.{role}--{jti}.{jwt}
 	//
-	// WHY human-readable prefix (dns-he-net.{account}.{role}--):
+	// WHY human-readable prefix:
 	//   An operator looking at a token in a config file or environment variable can
-	//   immediately tell which service, account, and role it belongs to without
+	//   immediately tell which service, account, zone, and role it belongs to without
 	//   base64-decoding the JWT payload. This prevents mixing up tokens from different
 	//   accounts or misidentifying a viewer token as an admin token.
-	//   Example: dns-he-net.primary.admin--6f2647d8-ff3d-4922-bac5-0aca3a6f11e2.eyJhbG...
+	//   Example (zone-scoped):    dns-he-net.primary.example.com.admin--6f2647d8....eyJhbG...
+	//   Example (account-wide):   dns-he-net.primary.admin--6f2647d8....eyJhbG...
 	//
 	// WHY "--" as the prefix/token separator (not "."):
 	//   The readable prefix itself contains dots (dns-he-net. and {account}.{role}).
@@ -215,21 +237,29 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 	//     - Role values are "admin" or "viewer" (no hyphens at all)
 	//     - UUID v4 uses single hyphens between segments (never double)
 	//     - The JWT base64url alphabet contains no hyphens at all
-	//   So "--" appears exactly once, at the prefix/token boundary.
+	//   So "--" appears exactly once, at the prefix/token boundary, regardless of whether
+	//   zone name is included (zone names like "example.com" contain dots but no "--").
+	//
+	// WHY zone name in prefix but zone_id in JWT claims:
+	//   The prefix is human-readable display only. Enforcement uses ZoneID (numeric HE ID)
+	//   from the JWT claims in RequireZoneAccess middleware — not the zone name.
+	//   Zone names can be renamed; zone IDs are stable numeric identifiers from HE.net.
 	//
 	// WHY keep {jti}.{jwt} after "--" (not just the JWT):
 	//   The JTI prefix makes the inner token self-identifying for revocation —
 	//   the operator reads the first UUID segment to find the DB row to revoke.
-	//   This property is preserved inside the "--" boundary.
 	//
 	// BACKWARD COMPATIBILITY: ValidateToken detects the "--" boundary before splitting.
-	//   Old tokens without the prefix (just {jti}.{jwt}) continue to work — they have
-	//   no "--" so ValidateToken uses them as-is.
+	//   Old tokens without the prefix (just {jti}.{jwt}) continue to work.
 	//
 	// HASH covers the full prefixed token (not just the JWT):
-	//   Both issuance (here) and validation (ValidateToken) hash the same full string,
-	//   so the token_hash DB column continues to bind the token to its DB row correctly.
-	rawToken = "dns-he-net." + accountID + "." + role + "--" + jti + "." + jwtString
+	//   Both issuance (here) and validation (ValidateToken) hash the same full string.
+	prefix := "dns-he-net." + accountID + "."
+	if zoneName != "" {
+		prefix += zoneName + "."
+	}
+	prefix += role
+	rawToken = prefix + "--" + jti + "." + jwtString
 
 	// Compute the SHA-256 hash — this is the only token value persisted in the DB (SEC-02).
 	tokenHash := hashToken(rawToken)
@@ -242,6 +272,14 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 	var expiresAtVal interface{}
 	if expiresAt != nil {
 		expiresAtVal = expiresAt
+	}
+	// zone_id and zone_name are stored as NULL for account-wide tokens.
+	var zoneIDVal, zoneNameVal interface{}
+	if zoneID != "" {
+		zoneIDVal = zoneID
+		if zoneName != "" {
+			zoneNameVal = zoneName
+		}
 	}
 
 	// Encrypt and store the raw token when the recovery feature is enabled.
@@ -259,9 +297,10 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 	// Store the hash and optionally the encrypted token in the tokens table.
 	// token_hash is always stored (revocation check hot path).
 	// token_value is stored only when recovery is enabled (see recoveryKey above).
+	// zone_id / zone_name are NULL for account-wide tokens (migration 009).
 	_, err = db.ExecContext(ctx,
-		`INSERT INTO tokens (jti, account_id, role, label, token_hash, expires_at, token_value) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		jti, accountID, role, labelVal, tokenHash, expiresAtVal, tokenValueVal,
+		`INSERT INTO tokens (jti, account_id, role, label, token_hash, expires_at, token_value, zone_id, zone_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		jti, accountID, role, labelVal, tokenHash, expiresAtVal, tokenValueVal, zoneIDVal, zoneNameVal,
 	)
 	if err != nil {
 		return "", "", fmt.Errorf("store token: %w", err)
@@ -424,7 +463,8 @@ func RevokeByJTI(ctx context.Context, db *sql.DB, jti string) error {
 func ListTokens(ctx context.Context, db *sql.DB, accountID string, recoveryEnabled bool) ([]TokenRecord, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT jti, account_id, role, label, created_at, expires_at, revoked_at,
-		        (token_value IS NOT NULL) AS has_stored_token
+		        (token_value IS NOT NULL) AS has_stored_token,
+		        zone_id, zone_name
 		 FROM tokens
 		 WHERE account_id = ?
 		 ORDER BY created_at DESC`,
@@ -442,6 +482,7 @@ func ListTokens(ctx context.Context, db *sql.DB, accountID string, recoveryEnabl
 		var expiresAt sql.NullTime
 		var revokedAt sql.NullTime
 		var hasStoredToken bool
+		var zoneID, zoneName sql.NullString
 
 		if err := rows.Scan(
 			&rec.JTI,
@@ -452,6 +493,8 @@ func ListTokens(ctx context.Context, db *sql.DB, accountID string, recoveryEnabl
 			&expiresAt,
 			&revokedAt,
 			&hasStoredToken,
+			&zoneID,
+			&zoneName,
 		); err != nil {
 			return nil, fmt.Errorf("scan token row: %w", err)
 		}
@@ -464,6 +507,12 @@ func ListTokens(ctx context.Context, db *sql.DB, accountID string, recoveryEnabl
 		}
 		if revokedAt.Valid {
 			rec.RevokedAt = &revokedAt.Time
+		}
+		if zoneID.Valid {
+			rec.ZoneID = &zoneID.String
+		}
+		if zoneName.Valid {
+			rec.ZoneName = &zoneName.String
 		}
 		// Recoverable is only true when the feature flag is on AND a ciphertext exists.
 		// If the flag is off, we never expose the Show button even if ciphertexts are present.

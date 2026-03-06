@@ -17,6 +17,12 @@ type issueTokenRequest struct {
 	Role          string `json:"role"`
 	Label         string `json:"label"`
 	ExpiresInDays int    `json:"expires_in_days"`
+	// ZoneID and ZoneName are optional. When ZoneID is set, the issued token is scoped
+	// to that specific zone and will be rejected by RequireZoneAccess for any other zone.
+	// ZoneName is informational only (included in token prefix for readability).
+	// Leave both empty for an account-wide token.
+	ZoneID   string `json:"zone_id"`
+	ZoneName string `json:"zone_name"`
 }
 
 // issueTokenResponse is the JSON response for a newly issued token.
@@ -74,7 +80,7 @@ func IssueToken(db *sql.DB, secret []byte, recoveryKey *[32]byte) http.HandlerFu
 			return
 		}
 
-		rawToken, jti, err := token.IssueToken(r.Context(), db, accountID, req.Role, req.Label, req.ExpiresInDays, secret, recoveryKey)
+		rawToken, jti, err := token.IssueToken(r.Context(), db, accountID, req.Role, req.Label, req.ZoneID, req.ZoneName, req.ExpiresInDays, secret, recoveryKey)
 		if err != nil {
 			response.WriteError(w, http.StatusInternalServerError, "issue_error", "Failed to issue token")
 			return

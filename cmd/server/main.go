@@ -499,6 +499,8 @@ func runTokenCreate() {
 	role := fs.String("role", "admin", "Token role: admin or viewer")
 	label := fs.String("label", "", "Optional human-readable label")
 	expiresInDays := fs.Int("expires-in-days", 0, "Expiry in days; 0 = unlimited")
+	zoneID := fs.String("zone-id", "", "Optional HE zone ID to scope the token to a single zone (e.g. 12345678)")
+	zoneName := fs.String("zone-name", "", "Optional zone domain name for token prefix display (e.g. example.com)")
 
 	parseArgs := os.Args[2:]
 	if len(parseArgs) > 0 && parseArgs[0] == "create" {
@@ -538,7 +540,7 @@ func runTokenCreate() {
 		os.Exit(1)
 	}
 
-	rawToken, jti, err := token.IssueToken(context.Background(), db, *accountID, *role, *label, *expiresInDays, []byte(cfg.JWTSecret), nil)
+	rawToken, jti, err := token.IssueToken(context.Background(), db, *accountID, *role, *label, *zoneID, *zoneName, *expiresInDays, []byte(cfg.JWTSecret), nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: issue token: %v\n", err)
 		os.Exit(1)
