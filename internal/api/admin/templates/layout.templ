@@ -12,7 +12,7 @@ package templates
 //   Keeping them separate avoids re-deriving one from the other inside templates.
 type PageData struct {
 	Title      string
-	ActivePage string // "accounts", "tokens", "zones", "sync", "audit", "users"
+	ActivePage string // "accounts", "tokens", "zones", "sync", "audit", "users", "about"
 	IsAdmin    bool   // true for env-configured Server Admin; false for Account Users
 	Username   string // display name shown in top-bar identity badge
 	Role       string // "Admin" or "User" shown next to the username
@@ -51,6 +51,10 @@ templ Layout(data PageData) {
 					@NavLink("/admin/users", "Users", data.ActivePage == "users")
 				}
 				<div class="sidebar-footer">
+					// WHY About is inside sidebar-footer (not with the main nav links):
+					//   It is a utility link, not a workflow step. Placing it above Logout at the
+					//   bottom keeps the main navigation clean and matches common portal conventions.
+					@NavLink("/admin/about", "About", data.ActivePage == "about")
 					<a href="/admin/logout" class="nav-link">Logout</a>
 				</div>
 			</nav>

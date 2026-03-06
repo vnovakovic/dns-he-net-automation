@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"bytes"
 	"io/fs"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/yuin/goldmark"
 	playwright "github.com/playwright-community/playwright-go"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -59,6 +61,7 @@ func RegisterAdminRoutes(
 	jwtSecret []byte,
 	username, password, sessionKeyHex string,
 	tokenRecoveryEnabled bool,
+	version string,
 ) {
 	// Decode the hex session signing key. Fall back to a zero key if misconfigured —
 	// zero key means session cookies will not validate (every request redirects to login),
@@ -170,6 +173,7 @@ func RegisterAdminRoutes(
 			//   account users can change only their own (enforced inside the handler).
 			r.Post("/change-admin-password", handleChangeAdminPassword(db))
 			r.Post("/users/{userID}/password", handleChangeUserPassword(db))
+			r.Get("/about", handleAboutPage(version))
 		})
 	})
 }
@@ -1642,5 +1646,53 @@ func handleChangeUserPassword(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("HX-Reswap", "innerHTML")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.PasswordChangeSuccess("Password changed successfully.").Render(r.Context(), w)
+	}
+}
+
+// handleAboutPage renders GET /admin/about — the documentation and version page.
+//
+// WHY markdown rendered server-side (not a static HTML file):
+//   about.md is easy to edit without touching Go or templ files. Goldmark renders it
+//   to HTML once per request (fast — the source is <10 KB). The binary stays
+//   self-contained because about.md is embedded in staticFS at compile time.
+//
+// WHY templ.Raw() is safe here:
+//   The HTML source is goldmark-rendered from a file embedded in the binary at compile
+//   time. It is not user-supplied, so XSS from dynamic input is not possible.
+//   goldmark's default renderer escapes any HTML that appears literally in the markdown.
+//
+// WHY {{VERSION}} substitution (not a template engine):
+//   Simple strings.ReplaceAll keeps the about.md readable and avoids adding a
+//   templating dependency just for one placeholder.
+func handleAboutPage(version string) http.HandlerFunc {
+	// Read and render the markdown once at handler construction (not per request)
+	// because about.md is static — it never changes at runtime.
+	//
+	// WHY not render at startup (before routes are registered):
+	//   staticFS is available only after package init. Handler construction (inside
+	//   RegisterAdminRoutes) happens after init, so this is the earliest safe point.
+	mdBytes, err := staticFS.ReadFile("static/about.md")
+	var renderedHTML string
+	if err != nil {
+		renderedHTML = "<p class=\"error-banner\">Documentation could not be loaded.</p>"
+	} else {
+		src := strings.ReplaceAll(string(mdBytes), "{{VERSION}}", version)
+		var buf bytes.Buffer
+		if mdErr := goldmark.Convert([]byte(src), &buf); mdErr != nil {
+			renderedHTML = "<p class=\"error-banner\">Documentation render error.</p>"
+		} else {
+			renderedHTML = buf.String()
+		}
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := templates.PageData{
+			Title:      "About",
+			ActivePage: "about",
+			IsAdmin:    isAdminSession(r),
+			Username:   sessionDisplayName(r),
+			Role:       sessionRole(r),
+		}
+		_ = templates.AboutPage(renderedHTML, data).Render(r.Context(), w)
 	}
 }

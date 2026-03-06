@@ -902,3 +902,130 @@ details.zones-collapsible > summary.zones-summary::-webkit-details-marker {
     padding: 16px;
   }
 }
+
+/* ============================================================
+   About Page — Markdown Prose Styles
+   Scoped to .about-content so they don't leak into other pages.
+   ============================================================ */
+.about-content {
+  max-width: 860px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.about-content h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  color: var(--text);
+}
+
+.about-content h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 2rem 0 0.6rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.about-content h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 1.4rem 0 0.4rem;
+  color: var(--text);
+}
+
+.about-content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 1.1rem 0 0.3rem;
+  color: var(--text);
+}
+
+.about-content p {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.about-content ul,
+.about-content ol {
+  margin: 0.4rem 0 0.75rem 1.4rem;
+  padding: 0;
+}
+
+.about-content li {
+  margin-bottom: 0.25rem;
+}
+
+.about-content code {
+  font-family: monospace;
+  font-size: 0.87em;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+}
+
+.about-content pre {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  margin: 0.6rem 0 1rem;
+}
+
+.about-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+.about-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0 1rem;
+  font-size: 0.9rem;
+}
+
+.about-content th {
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.about-content td {
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.about-content tr:last-child td {
+  border-bottom: none;
+}
+
+.about-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.75rem 0;
+}
+
+.about-content strong {
+  font-weight: 600;
+}
+
+.about-content a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about-content a:hover {
+  text-decoration: underline;
+}

@@ -45,7 +45,8 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 	vaultHealthFn func() string,
 	reg *metrics.Registry,
 	adminUsername, adminPassword, adminSessionKey string,
-	tokenRecoveryEnabled bool) http.Handler {
+	tokenRecoveryEnabled bool,
+	version string) http.Handler {
 	r := chi.NewRouter()
 
 	// Derive the AES-256 recovery key from the JWT secret when recovery is enabled.
@@ -178,7 +179,7 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 	// Auth (Basic Auth + HMAC-SHA256 session cookie) is handled inside RegisterAdminRoutes
 	// via the AdminAuth middleware. The full dependency set is passed here; stub handlers
 	// ignore unused params until plan 03/04 fills them in.
-	admin.RegisterAdminRoutes(r, db, sm, breakers, secret, adminUsername, adminPassword, adminSessionKey, tokenRecoveryEnabled)
+	admin.RegisterAdminRoutes(r, db, sm, breakers, secret, adminUsername, adminPassword, adminSessionKey, tokenRecoveryEnabled, version)
 
 	return r
 }

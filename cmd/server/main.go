@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -340,10 +341,17 @@ func main() {
 	// do not need to change main.go or the NewRouter signature. (UI-01, Checker issue 5 fix)
 	// Pass adminPasswordHash (bcrypt hash, not plaintext) — the router and admin UI
 	// use bcrypt.CompareHashAndPassword for all admin password checks.
+	// Read the VERSION file embedded at the repo root for display on the About page.
+	// Falls back to "dev" when running outside the repo (e.g. in a stripped Docker image).
+	appVersion := "dev"
+	if vb, verr := os.ReadFile("VERSION"); verr == nil {
+		appVersion = strings.TrimSpace(string(vb))
+	}
+
 	handler := api.NewRouter(db, sm, launcher, []byte(cfg.JWTSecret), breakers,
 		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn, reg,
 		cfg.AdminUsername, adminPasswordHash, cfg.AdminSessionKey,
-		cfg.TokenRecoveryEnabled)
+		cfg.TokenRecoveryEnabled, appVersion)
 
 	// Auto-generate a self-signed TLS certificate on first start when SSL_CERT/SSL_KEY paths
 	// are configured but the files do not yet exist.
