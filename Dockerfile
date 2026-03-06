@@ -43,14 +43,45 @@ RUN apt-get update && \
         tzdata && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy the Playwright CLI from the builder stage and install Chromium with system deps.
+# Install Playwright browser binaries to a fixed, world-readable path BEFORE creating the
+# non-root user. Running as root here is intentional — `playwright install` writes system
+# libraries via apt and needs root. The fixed path makes the browsers accessible to the
+# non-root service user at runtime.
+#
+# WHY PLAYWRIGHT_BROWSERS_PATH=/ms-playwright (not the default /root/.cache/ms-playwright):
+#   The default install location is under /root/.cache which is mode 700 — not readable by
+#   other users. By setting PLAYWRIGHT_BROWSERS_PATH to a world-accessible path we ensure
+#   the server user (uid 1001) can reach the Chromium binary without any chown/chmod tricks.
+#
+# PREVIOUSLY: without this env var, `playwright install` wrote to /root/.cache/ms-playwright.
+#   The server process (uid 1001) could not read that directory → "browser not found" at runtime.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+COPY --from=builder /go/bin/playwright /usr/local/bin/playwright
+
 # --with-deps installs ~50 system libraries required by Chromium (libx11, libnss3, etc.).
 # Without --with-deps, Chromium fails to launch with "error while loading shared libraries".
-COPY --from=builder /go/bin/playwright /usr/local/bin/playwright
 RUN playwright install --with-deps chromium
 
 # Create a non-root user for running the service (security hardening).
 RUN useradd --system --no-create-home --uid 1001 server
+
+# Create the Playwright driver unpack directory owned by the service user.
+#
+# WHY /ms-playwright-driver:
+#   playwright-go embeds the Node.js driver binary and unpacks it to PLAYWRIGHT_DRIVER_PATH
+#   at process startup. Without a home directory (--no-create-home), the default unpack
+#   location os.UserCacheDir() resolves to /home/server which does not exist → container
+#   exits immediately with "could not create driver directory: mkdir /home/server: permission denied".
+#
+#   This is identical to the Windows service problem where LocalSystem unpacked to a
+#   different profile path than the installing user. The fix is the same: a fixed path
+#   owned by the process account, set via PLAYWRIGHT_DRIVER_PATH.
+#
+# PREVIOUSLY: no PLAYWRIGHT_DRIVER_PATH set → playwright-go called os.UserCacheDir() →
+#   tried to create /home/server → "permission denied" → service crashed on first start.
+RUN mkdir -p /ms-playwright-driver && chown server:server /ms-playwright-driver
+ENV PLAYWRIGHT_DRIVER_PATH=/ms-playwright-driver
 
 # Create persistent data directory owned by the service user.
 # WHY /data (not /etc or /var/lib):
