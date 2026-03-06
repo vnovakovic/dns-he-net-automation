@@ -719,8 +719,17 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 			return
 		}
 
+	// deleteResult holds per-record metadata for the JSON response and post-delete verification.
+	// WHY a struct (not just []string of IDs): the response must include name and type so the
+	// caller can confirm exactly which records were removed without a follow-up GET.
+	type deleteResult struct {
+		Name string           `json:"name"`
+		Type model.RecordType `json:"type"`
+		ID   string           `json:"id"` // HE numeric row ID from the <tr> element
+	}
+
 		start := time.Now()
-		var deletedIDs []string
+		var deleted []deleteResult
 
 		err := breakers.Execute(r.Context(), claims.AccountID, func() error {
 			return resilience.WithRetry(r.Context(), func(ctx context.Context) error {
@@ -764,6 +773,7 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 					//   Passing rec.ID ("") to deleteRecord JS causes it to silently do nothing.
 					type deleteTarget struct {
 						rowID   string
+						name    string
 						recType model.RecordType
 					}
 					var toDelete []deleteTarget
@@ -783,7 +793,7 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 						if filterType != "" && rec.Type != filterType {
 							continue
 						}
-						toDelete = append(toDelete, deleteTarget{rowID: row.ID, recType: rec.Type})
+						toDelete = append(toDelete, deleteTarget{rowID: row.ID, name: rec.Name, recType: rec.Type})
 					}
 
 					rf := pages.NewRecordFormPage(page)
@@ -791,7 +801,38 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 						if err := rf.DeleteRecord(t.rowID, zoneName, string(t.recType)); err != nil {
 							return err
 						}
-						deletedIDs = append(deletedIDs, t.rowID)
+						deleted = append(deleted, deleteResult{Name: t.name, Type: t.recType, ID: t.rowID})
+					}
+
+					// Post-delete verification: reload the page and confirm none of the deleted
+					// row IDs are still present in the DOM.
+					//
+					// WHY verify after delete (not trust DeleteRecord return value):
+					//   DeleteRecord bypasses the confirmation dialog via direct form submit.
+					//   Page navigation errors after submit are intentionally ignored, so absence
+					//   of error does not guarantee the row is gone. Re-reading GetRecordRows from
+					//   the live page is the only reliable confirmation.
+					//
+					// WHY NavigateToZone again (not reuse current page state):
+					//   After form submit the page may be mid-reload. A fresh NavigateToZone
+					//   guarantees we read a fully rendered page.
+					if len(deleted) > 0 {
+						if err := zl.NavigateToZone(zoneID); err != nil {
+							return fmt.Errorf("post-delete verification navigate failed: %w", err)
+						}
+						afterRows, err := zl.GetRecordRows()
+						if err != nil {
+							return fmt.Errorf("post-delete verification read failed: %w", err)
+						}
+						afterIDs := make(map[string]bool, len(afterRows))
+						for _, r := range afterRows {
+							afterIDs[r.ID] = true
+						}
+						for _, d := range deleted {
+							if afterIDs[d.ID] {
+								return fmt.Errorf("post-delete verification failed: row %s (%s %s) still present after deletion", d.ID, d.Type, d.Name)
+							}
+						}
 					}
 
 					return nil
@@ -807,7 +848,7 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 			auditResult = "failure"
 			auditErrMsg = err.Error()
 		}
-		if len(deletedIDs) == 0 {
+		if len(deleted) == 0 {
 			if auditErr := audit.Write(r.Context(), db, audit.Entry{
 				TokenID:   claims.ID,
 				AccountID: claims.AccountID,
@@ -819,12 +860,12 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 				slog.ErrorContext(r.Context(), "audit log write failed", "error", auditErr)
 			}
 		}
-		for _, id := range deletedIDs {
+		for _, d := range deleted {
 			if auditErr := audit.Write(r.Context(), db, audit.Entry{
 				TokenID:   claims.ID,
 				AccountID: claims.AccountID,
 				Action:    "delete",
-				Resource:  "record:" + id,
+				Resource:  "record:" + d.ID,
 				Result:    auditResult,
 				ErrorMsg:  auditErrMsg,
 			}); auditErr != nil {
@@ -842,12 +883,20 @@ func DeleteRecordByName(db *sql.DB, sm *browser.SessionManager, breakers *resili
 			"zone_id", zoneID,
 			"name", filterName,
 			"type_filter", string(filterType),
-			"deleted_count", len(deletedIDs),
-			"deleted_ids", deletedIDs,
+			"deleted_count", len(deleted),
 			"duration_ms", time.Since(start).Milliseconds(),
 		)
 
-		w.WriteHeader(http.StatusNoContent)
+		// WHY 200 + JSON body (not 204 No Content):
+		//   204 gives the caller no way to confirm what was deleted. Returning the list
+		//   of deleted records (name, type, id) lets callers verify the right records
+		//   were removed and is consistent with the post-delete verification already
+		//   done server-side. Zero-match deletes still return 200 with deleted_count:0
+		//   (idempotent — the resource was already absent).
+		response.WriteJSON(w, http.StatusOK, map[string]any{
+			"deleted_count": len(deleted),
+			"deleted":       deleted,
+		})
 	}
 }
 
