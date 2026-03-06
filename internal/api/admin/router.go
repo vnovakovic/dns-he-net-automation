@@ -15,6 +15,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/renderer/html"
 	playwright "github.com/playwright-community/playwright-go"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -1696,7 +1698,11 @@ func handleAboutPage(version string) http.HandlerFunc {
 	} else {
 		src := strings.ReplaceAll(string(mdBytes), "{{VERSION}}", version)
 		var buf bytes.Buffer
-		if mdErr := goldmark.Convert([]byte(src), &buf); mdErr != nil {
+		md := goldmark.New(
+		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithRendererOptions(html.WithUnsafe()),
+	)
+		if mdErr := md.Convert([]byte(src), &buf); mdErr != nil {
 			renderedHTML = "<p class=\"error-banner\">Documentation render error.</p>"
 		} else {
 			renderedHTML = buf.String()
