@@ -2,6 +2,16 @@ package templates
 
 import "time"
 
+// PasswordChangeError renders an error message for a password change form.
+templ PasswordChangeError(msg string) {
+	<p class="error-banner" style="margin:0;">{ msg }</p>
+}
+
+// PasswordChangeSuccess renders a success message for a password change form.
+templ PasswordChangeSuccess(msg string) {
+	<p class="text-success" style="margin:0;color:var(--color-success,#2a9d3a);">{ msg }</p>
+}
+
 // UserRow is the display struct for a row in the users table.
 // Separate from the DB model because this package should not import internal/model —
 // users live in a different domain (admin auth) from HE accounts (dns automation).
@@ -18,6 +28,7 @@ type UserRow struct {
 
 // UsersPage renders the user management page (GET /admin/users).
 // Admin-only — layout.templ hides the Users nav link for Account User sessions.
+// currentUserID is the logged-in user's ID (used to show the correct self-service change-password card).
 //
 // WHY table layout (not cards):
 //   Users are simpler records than HE accounts — no nested zones, no credentials to
@@ -33,7 +44,7 @@ type UserRow struct {
 //   silently fails — htmx finds no target, drops the response, and shows nothing.
 //   Keeping the tbody always present ensures the first registration works correctly.
 //   The empty-state message uses a <tr> so it is valid table markup.
-templ UsersPage(users []UserRow, data PageData) {
+templ UsersPage(users []UserRow, data PageData, currentUserID string) {
 	@Layout(data) {
 		<div class="page-header">
 			<h2>Account Users</h2>
@@ -54,52 +65,114 @@ templ UsersPage(users []UserRow, data PageData) {
 						<tr><td colspan="3" class="text-muted">No account users registered yet.</td></tr>
 					} else {
 						for _, u := range users {
-							@UserTableRow(u)
+							@UserTableRow(u, data.IsAdmin)
 						}
 					}
 				</tbody>
 			</table>
 		</div>
-		<div class="card">
-			<h3>Register User</h3>
-			<p class="text-muted">Create a login for an operator. They will only see their own dns.he.net accounts.</p>
-			<div id="user-register-error" style="margin-bottom:0.5rem;"></div>
-			<form
-				hx-post="/admin/users"
-				hx-target="#users-table-body"
-				hx-swap="beforeend"
-				hx-on::after-request="this.reset()">
-				<div class="form-row">
-					<div class="form-group">
-						<label for="username">Username</label>
-						<input type="text" id="username" name="username" placeholder="e.g. alice" required/>
+		if data.IsAdmin {
+			<div class="card" style="margin-bottom:1rem;">
+				<h3>Register User</h3>
+				<p class="text-muted">Create a login for an operator. They will only see their own dns.he.net accounts.</p>
+				<div id="user-register-error" style="margin-bottom:0.5rem;"></div>
+				<form
+					hx-post="/admin/users"
+					hx-target="#users-table-body"
+					hx-swap="beforeend"
+					hx-on::after-request="this.reset()">
+					<div class="form-row">
+						<div class="form-group">
+							<label for="username">Username</label>
+							<input type="text" id="username" name="username" placeholder="e.g. alice" required/>
+						</div>
+						<div class="form-group">
+							<label for="password">Password</label>
+							<input type="password" id="password" name="password" placeholder="login password" required/>
+						</div>
+						<button type="submit" class="btn btn-primary">Register</button>
 					</div>
-					<div class="form-group">
-						<label for="password">Password</label>
-						<input type="password" id="password" name="password" placeholder="login password" required/>
+				</form>
+			</div>
+			// Server Admin: change the admin UI master password.
+			<div class="card" style="margin-bottom:1rem;">
+				<h3>Change Admin Password</h3>
+				<p class="text-muted">Change the server admin login password. Takes effect on the next login.</p>
+				<div id="admin-pw-error" style="margin-bottom:0.5rem;"></div>
+				<form hx-post="/admin/change-admin-password" hx-on::after-request="this.reset()">
+					<div class="form-row">
+						<div class="form-group">
+							<label>Current password</label>
+							<input type="password" name="current_password" required/>
+						</div>
+						<div class="form-group">
+							<label>New password</label>
+							<input type="password" name="new_password" placeholder="min 8 characters" required/>
+						</div>
+						<div class="form-group">
+							<label>Confirm new password</label>
+							<input type="password" name="confirm_password" required/>
+						</div>
+						<button type="submit" class="btn btn-primary">Change Password</button>
 					</div>
-					<button type="submit" class="btn btn-primary">Register</button>
-				</div>
-			</form>
-		</div>
+				</form>
+			</div>
+		} else {
+			// Account User: change their own password.
+			<div class="card" style="margin-bottom:1rem;">
+				<h3>Change My Password</h3>
+				<p class="text-muted">Change your login password.</p>
+				<div id={ "user-pw-error-" + currentUserID } style="margin-bottom:0.5rem;"></div>
+				<form hx-post={ "/admin/users/" + currentUserID + "/password" } hx-on::after-request="this.reset()">
+					<div class="form-row">
+						<div class="form-group">
+							<label>Current password</label>
+							<input type="password" name="current_password" required/>
+						</div>
+						<div class="form-group">
+							<label>New password</label>
+							<input type="password" name="new_password" placeholder="min 8 characters" required/>
+						</div>
+						<div class="form-group">
+							<label>Confirm new password</label>
+							<input type="password" name="confirm_password" required/>
+						</div>
+						<button type="submit" class="btn btn-primary">Change Password</button>
+					</div>
+				</form>
+			</div>
+		}
 	}
 }
 
 // UserTableRow renders one row in the users table.
 // Used on page load inside UsersPage and as the htmx partial returned by handleUserCreate.
-templ UserTableRow(u UserRow) {
+// isAdmin controls whether the admin-only "Remove" and "Reset Password" buttons are shown.
+templ UserTableRow(u UserRow, isAdmin bool) {
 	<tr>
 		<td>{ u.Username }</td>
 		<td>{ u.CreatedAt.Format("2006-01-02") }</td>
-		<td>
-			<button
-				class="btn btn-danger btn-sm"
-				hx-delete={ "/admin/users/" + u.ID }
-				hx-target="closest tr"
-				hx-swap="outerHTML swap:500ms"
-				hx-confirm={ "Remove user '" + u.Username + "' and all their accounts?" }>
-				Remove
-			</button>
+		<td style="display:flex;gap:0.35rem;flex-wrap:wrap;">
+			if isAdmin {
+				<button
+					class="btn btn-danger btn-sm"
+					hx-delete={ "/admin/users/" + u.ID }
+					hx-target="closest tr"
+					hx-swap="outerHTML swap:500ms"
+					hx-confirm={ "Remove user '" + u.Username + "' and all their accounts?" }>
+					Remove
+				</button>
+				// Inline reset-password form — no dialog needed, just a small inline form.
+				// The error div is keyed by userID so multiple rows don't share the same target.
+				<div style="display:inline-flex;gap:0.25rem;align-items:center;">
+					<div id={ "user-pw-error-" + u.ID }></div>
+					<form hx-post={ "/admin/users/" + u.ID + "/password" } hx-on::after-request="this.reset()" style="display:inline-flex;gap:0.25rem;">
+						<input type="password" name="new_password" placeholder="new password" style="width:9rem;"/>
+						<input type="password" name="confirm_password" placeholder="confirm" style="width:7rem;"/>
+						<button type="submit" class="btn btn-sm">Reset</button>
+					</form>
+				</div>
+			}
 		</td>
 	</tr>
 }
@@ -111,7 +184,7 @@ templ UserTableRow(u UserRow) {
 //   If a previous failed registration left an error in #user-register-error,
 //   this OOB swap replaces it with an empty div without a page reload.
 templ UserRegisterSuccess(u UserRow) {
-	@UserTableRow(u)
+	@UserTableRow(u, true) // always called from admin context
 	<div id="user-register-error" hx-swap-oob="true"></div>
 }
 

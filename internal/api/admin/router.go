@@ -24,6 +24,7 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/model"
 	"github.com/vnovakov/dns-he-net-automation/internal/reconcile"
 	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
+	"github.com/vnovakov/dns-he-net-automation/internal/store"
 	"github.com/vnovakov/dns-he-net-automation/internal/token"
 )
 
@@ -102,7 +103,7 @@ func RegisterAdminRoutes(
 		// Login must be accessible to unauthenticated users (obvious).
 		// Logout is outside auth so it works even if the cookie becomes invalid.
 		r.Get("/login", handleLoginPage())
-		r.Post("/login", handleLoginPost(db, username, password, signingKey))
+		r.Post("/login", handleLoginPost(db, username, signingKey))
 		r.Get("/logout", handleLogout())
 
 		// Protected routes — all require AdminAuth (Basic Auth or session cookie).
@@ -136,7 +137,7 @@ func RegisterAdminRoutes(
 			r.Get("/tokens/{accountID}", handleTokensForAccount(db, tokenRecoveryEnabled))
 			r.Post("/tokens/{accountID}", handleTokenIssue(db, jwtSecret, recoveryKey))
 			r.Delete("/tokens/{tokenID}", handleTokenRevoke(db))
-			r.Post("/tokens/{tokenID}/reveal", handleTokenReveal(db, jwtSecret, password, tokenRecoveryEnabled))
+			r.Post("/tokens/{tokenID}/reveal", handleTokenReveal(db, jwtSecret, tokenRecoveryEnabled))
 
 			// Zones page: shows zones from DB with per-zone Export BIND / Import BIND actions.
 			// export and import routes use the numeric HE zone ID (not the zone name) so
@@ -162,6 +163,12 @@ func RegisterAdminRoutes(
 			r.Get("/users", handleUsersPage(db))
 			r.Post("/users", handleUserCreate(db))
 			r.Delete("/users/{userID}", handleUserDelete(db))
+			// Password change routes.
+			// POST /admin/change-admin-password — server admin changes their own password.
+			// POST /admin/users/{userID}/password — admin changes any user's password;
+			//   account users can change only their own (enforced inside the handler).
+			r.Post("/change-admin-password", handleChangeAdminPassword(db))
+			r.Post("/users/{userID}/password", handleChangeUserPassword(db))
 		})
 	})
 }
@@ -188,7 +195,18 @@ func handleLoginPage() http.HandlerFunc {
 //   sees the re-rendered form because the response body contains HTML.
 //
 // adminPasswordHash is a bcrypt hash — never plaintext. See store.EnsureAdminPassword.
-func handleLoginPost(db *sql.DB, adminUsername, adminPasswordHash string, signingKey []byte) http.HandlerFunc {
+// handleLoginPost is intentionally NOT given the startup-cached adminPasswordHash.
+// It reads the hash directly from DB on each login so that password changes (via
+// handleChangeAdminPassword) take effect on the next login without a server restart.
+//
+// WHY read from DB on every login (not use startup-cached hash):
+//   The startup-cached hash is computed once in main.go and passed by value. After
+//   handleChangeAdminPassword updates the DB, the in-memory value stays stale until restart.
+//   Reading from DB adds one query per login attempt — negligible overhead since logins are rare.
+//
+// PREVIOUSLY: took `adminPasswordHash string` as a parameter. Changed to DB read so that
+//   the admin password change feature works without requiring a server restart.
+func handleLoginPost(db *sql.DB, adminUsername string, signingKey []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
@@ -197,11 +215,15 @@ func handleLoginPost(db *sql.DB, adminUsername, adminPasswordHash string, signin
 		u := r.FormValue("username")
 		p := r.FormValue("password")
 
-		// 1. Admin check — bcrypt compare against stored hash.
-		if u == adminUsername && bcrypt.CompareHashAndPassword([]byte(adminPasswordHash), []byte(p)) == nil {
-			IssueAdminSessionCookie(w, signingKey)
-			http.Redirect(w, r, "/admin/accounts", http.StatusFound)
-			return
+		// 1. Admin check — re-read hash from DB so password changes take effect immediately.
+		if u == adminUsername {
+			if hash, err := store.GetAdminPasswordHash(r.Context(), db); err == nil {
+				if bcrypt.CompareHashAndPassword([]byte(hash), []byte(p)) == nil {
+					IssueAdminSessionCookie(w, signingKey)
+					http.Redirect(w, r, "/admin/accounts", http.StatusFound)
+					return
+				}
+			}
 		}
 
 		// 2. Account user check — bcrypt verify against DB.
@@ -648,13 +670,11 @@ func handleTokenRevoke(db *sql.DB) http.HandlerFunc {
 //   GET requests are logged, cached, and appear in browser history. The password must
 //   be in the request body, which rules out GET. POST keeps the password out of URLs.
 //
-// WHY adminPasswordHash passed by value (not looked up from DB on each request):
-//   The hash is resolved once at startup (store.EnsureAdminPassword) and passed here.
-//   Avoiding a DB query per reveal call keeps the hot path lean. Account users are
-//   verified directly from the users table via authenticateAccountUser.
-//
-// adminPasswordHash is a bcrypt hash — bcrypt.CompareHashAndPassword is used for verification.
-func handleTokenReveal(db *sql.DB, jwtSecret []byte, adminPasswordHash string, enabled bool) http.HandlerFunc {
+// WHY read admin password from DB (not startup-cached hash):
+//   handleChangeAdminPassword updates the DB. If we used the startup-cached hash here,
+//   the reveal endpoint would reject the new admin password until restart.
+//   Reading from DB aligns with handleLoginPost — both always use the current password.
+func handleTokenReveal(db *sql.DB, jwtSecret []byte, enabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !enabled {
 			http.Error(w, "Token recovery is disabled on this server", http.StatusForbidden)
@@ -675,11 +695,9 @@ func handleTokenReveal(db *sql.DB, jwtSecret []byte, adminPasswordHash string, e
 
 		// Verify portal password based on session type.
 		if isAdminSession(r) {
-			// Server admin: bcrypt compare against stored hash.
-			// WHY bcrypt (not constant-time string compare): the admin password is stored as
-			// a bcrypt hash — plaintext is unavailable. bcrypt.CompareHashAndPassword is
-			// constant-time with respect to the hash comparison step.
-			if bcrypt.CompareHashAndPassword([]byte(adminPasswordHash), []byte(password)) != nil {
+			// Server admin: read current hash from DB — matches handleLoginPost behaviour.
+			hash, err := store.GetAdminPasswordHash(r.Context(), db)
+			if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
 				http.Error(w, "Invalid password", http.StatusForbidden)
 				return
 			}
@@ -933,17 +951,26 @@ func handleAccountLoadZones(db *sql.DB, sm *browser.SessionManager, breakers *re
 			return
 		}
 
-		// Filter out zones already stored in the DB so the operator only sees new zones.
+		// Filter out zones that should not be offered for selection:
+		//  1. Zones already stored in the DB under ANY account (global uniqueness).
+		//  2. Zones with no name (empty string) — scraping artifacts, not valid zones.
 		//
-		// WHY filter here (not in the template or at the browser layer):
-		//   The template has no DB access. Filtering in the handler keeps the template logic
-		//   simple and makes it easy to test. Presenting already-stored zones in the checkbox
-		//   list is confusing: operators may re-select them thinking they need to be added again,
-		//   or they may worry about duplicate entries.
+		// WHY filter globally (not just for current account):
+		//   A zone like eyodwa.org can only be controlled by ONE account in this system.
+		//   If it is already registered under a different account, showing it again in the
+		//   selection list would allow a second account to claim the same zone, creating
+		//   two DB rows with the same he_zone_id. Both tokens would then have authority over
+		//   the same real zone on dns.he.net — a security gap where two independent users
+		//   can modify each other's records without knowing about each other.
+		//
+		// WHY exclude empty names:
+		//   The HE.net zone list scraper may return stub entries with blank zone names
+		//   (e.g., newly created zones that have not been fully provisioned yet).
+		//   Storing a zone with name="" would break the (account_id, name) PRIMARY KEY.
 		//
 		// WHY build a map (not a nested loop): O(n) lookup vs O(n*m) for large zone lists.
 		existingRows, dbErr := db.QueryContext(r.Context(),
-			`SELECT name FROM zones WHERE account_id = ?`, accountID)
+			`SELECT DISTINCT name FROM zones`)
 		existingNames := make(map[string]bool)
 		if dbErr == nil {
 			for existingRows.Next() {
@@ -957,7 +984,7 @@ func handleAccountLoadZones(db *sql.DB, sm *browser.SessionManager, breakers *re
 
 		var newZones []model.Zone
 		for _, z := range fetched {
-			if !existingNames[z.Name] {
+			if z.Name != "" && !existingNames[z.Name] {
 				newZones = append(newZones, z)
 			}
 		}
@@ -1316,7 +1343,7 @@ func handleUsersPage(db *sql.DB) http.HandlerFunc {
 
 		data := templates.PageData{Title: "Users", ActivePage: "users", IsAdmin: true, Username: sessionDisplayName(r), Role: sessionRole(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = templates.UsersPage(users, data).Render(r.Context(), w)
+		_ = templates.UsersPage(users, data, getSessionUserID(r)).Render(r.Context(), w)
 	}
 }
 
@@ -1422,5 +1449,148 @@ func handleUserDelete(db *sql.DB) http.HandlerFunc {
 		}
 		// Return empty 200 — htmx swaps target row with empty body, removing it from DOM.
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// handleChangeAdminPassword changes the server admin password (POST /admin/change-admin-password).
+// Admin-only. Requires current password + new password (min 8 chars).
+// After success, the new password takes effect on the next login without a server restart
+// because handleLoginPost now reads the hash from DB rather than using a startup-cached value.
+func handleChangeAdminPassword(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAdminSession(r) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		current := r.FormValue("current_password")
+		newPwd := r.FormValue("new_password")
+		confirm := r.FormValue("confirm_password")
+
+		writeError := func(msg string) {
+			w.Header().Set("HX-Retarget", "#admin-pw-error")
+			w.Header().Set("HX-Reswap", "innerHTML")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_ = templates.PasswordChangeError(msg).Render(r.Context(), w)
+		}
+
+		if current == "" || newPwd == "" {
+			writeError("Current and new password are required.")
+			return
+		}
+		if newPwd != confirm {
+			writeError("New passwords do not match.")
+			return
+		}
+		if len(newPwd) < 8 {
+			writeError("New password must be at least 8 characters.")
+			return
+		}
+
+		// Verify the current admin password from DB.
+		hash, err := store.GetAdminPasswordHash(r.Context(), db)
+		if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(current)) != nil {
+			writeError("Current password is incorrect.")
+			return
+		}
+
+		newHash, err := bcrypt.GenerateFromPassword([]byte(newPwd), 12)
+		if err != nil {
+			writeError("Failed to hash password.")
+			return
+		}
+		if err := store.SetAdminPasswordHash(r.Context(), db, string(newHash)); err != nil {
+			writeError("Failed to save new password: " + err.Error())
+			return
+		}
+
+		w.Header().Set("HX-Retarget", "#admin-pw-error")
+		w.Header().Set("HX-Reswap", "innerHTML")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.PasswordChangeSuccess("Admin password changed successfully.").Render(r.Context(), w)
+	}
+}
+
+// handleChangeUserPassword changes an Account User's password (POST /admin/users/{userID}/password).
+// Admin can change any user's password. Account users can change only their own.
+//
+// WHY no current-password check for admin:
+//   The server admin has full authority over all account users — requiring the current password
+//   would block the admin from resetting a forgotten password. The admin UI itself requires
+//   the admin to be authenticated, which is sufficient authorization.
+//
+// WHY current-password required for self-service:
+//   An account user changing their own password must prove knowledge of the current password
+//   to prevent session hijacking (an attacker who steals the session cookie cannot change
+//   the password without knowing the original).
+func handleChangeUserPassword(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		targetUserID := chi.URLParam(r, "userID")
+		sessionUserID := getSessionUserID(r)
+		isAdmin := isAdminSession(r)
+
+		// Authorization: admin can change any user; account user can only change their own.
+		if !isAdmin && sessionUserID != targetUserID {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		newPwd := r.FormValue("new_password")
+		confirm := r.FormValue("confirm_password")
+		current := r.FormValue("current_password") // required for self-service; optional for admin
+
+		errorTarget := "#user-pw-error-" + targetUserID
+		writeError := func(msg string) {
+			w.Header().Set("HX-Retarget", errorTarget)
+			w.Header().Set("HX-Reswap", "innerHTML")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_ = templates.PasswordChangeError(msg).Render(r.Context(), w)
+		}
+
+		if newPwd == "" {
+			writeError("New password is required.")
+			return
+		}
+		if newPwd != confirm {
+			writeError("New passwords do not match.")
+			return
+		}
+		if len(newPwd) < 8 {
+			writeError("New password must be at least 8 characters.")
+			return
+		}
+
+		// Account users must verify their current password (prevent session-hijack escalation).
+		if !isAdmin {
+			if _, err := authenticateAccountUser(r.Context(), db, sessionUserID, current); err != nil {
+				writeError("Current password is incorrect.")
+				return
+			}
+		}
+
+		newHash, err := bcrypt.GenerateFromPassword([]byte(newPwd), 12)
+		if err != nil {
+			writeError("Failed to hash password.")
+			return
+		}
+		if _, err := db.ExecContext(r.Context(),
+			`UPDATE users SET password_hash = ? WHERE id = ?`,
+			string(newHash), targetUserID,
+		); err != nil {
+			writeError("Failed to save new password: " + err.Error())
+			return
+		}
+
+		w.Header().Set("HX-Retarget", errorTarget)
+		w.Header().Set("HX-Reswap", "innerHTML")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.PasswordChangeSuccess("Password changed successfully.").Render(r.Context(), w)
 	}
 }
