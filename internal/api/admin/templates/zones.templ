@@ -35,7 +35,7 @@ templ ZonesPage(accounts []model.Account, zonesByAccount map[string][]model.Zone
 			</div>
 		}
 		for _, acc := range accounts {
-			@ZonesForAccount(acc.ID, acc.Username, zonesByAccount[acc.ID])
+			@ZonesForAccount(acc.ID, acc.Name, acc.Username, zonesByAccount[acc.ID])
 		}
 	}
 }
@@ -48,9 +48,14 @@ templ ZonesPage(accounts []model.Account, zonesByAccount map[string][]model.Zone
 //   Export and Import use the HE numeric zone ID in the URL and in browser automation.
 //   A zone with an empty he_zone_id was manually registered or loaded before migration 005;
 //   its zone ID is unknown until the operator clicks "Load zones from HE" on the Accounts page.
-templ ZonesForAccount(accountID string, username string, zones []model.Zone) {
+//
+// accountID = UUID (used in URLs/form fields); accountName = user-chosen label (displayed).
+// WHY separate params: after migration 010, the UUID is opaque to operators. The name
+// is the human-readable label they chose (e.g. "primary"). URLs keep the UUID as the
+// stable internal routing key — never replaced by the name.
+templ ZonesForAccount(accountID string, accountName string, username string, zones []model.Zone) {
 	<div class="card" style="margin-bottom:1rem;">
-		<h3>{ accountID } <span class="text-muted" style="font-size:0.9em;">({ username })</span></h3>
+		<h3>{ accountName } <span class="text-muted" style="font-size:0.9em;">({ username })</span></h3>
 		if len(zones) == 0 {
 			<p class="text-muted">No zones loaded for this account. Use the <a href="/admin/accounts">Accounts page</a> to load zones from dns.he.net.</p>
 		} else {
