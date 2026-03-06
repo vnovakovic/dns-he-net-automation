@@ -95,6 +95,9 @@ USER server
 
 # Default environment variables for production deployment.
 ENV PLAYWRIGHT_HEADLESS=true
+# Token recovery is enabled by default — operators who do not want encrypted token
+# storage in the DB can override with TOKEN_RECOVERY_ENABLED=false at runtime.
+ENV TOKEN_RECOVERY_ENABLED=true
 
 # TLS certificate paths inside the container.
 # WHY /data (not /etc/ssl or /app):

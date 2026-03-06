@@ -145,7 +145,14 @@ type Config struct {
 	// │    Enable only in deployments where recovery is more important than this risk.   │
 	// │    The default is false for this reason.                                         │
 	// └─────────────────────────────────────────────────────────────────────────────────┘
-	TokenRecoveryEnabled bool `env:"TOKEN_RECOVERY_ENABLED" envDefault:"false"`
+	// WHY default true (not false):
+	//   Most deployments benefit from recovery — the operator created an admin token and
+	//   did not copy it. The previous default of false meant the feature silently did nothing
+	//   until explicitly enabled, which was confusing. Operators who want to disable it must
+	//   explicitly set TOKEN_RECOVERY_ENABLED=false. The security trade-off (encrypted token
+	//   stored in DB) is acceptable for self-hosted deployments where the DB and JWT_SECRET
+	//   are already on the same host.
+	TokenRecoveryEnabled bool `env:"TOKEN_RECOVERY_ENABLED" envDefault:"true"`
 
 	// Admin UI authentication (UI-04).
 	// Both AdminUsername and AdminPassword are required when the admin UI is accessed.
