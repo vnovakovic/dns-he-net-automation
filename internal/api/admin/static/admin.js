@@ -106,65 +106,65 @@
   }
 
   // --- GET builders ---
-  // GET /api/v1/zones/{zoneId}/records?type=TYPE&name=NAME
-  // Lists records in a zone filtered by type (and optionally name).
-  // WHY show name filter: makes the example more concrete and copy-paste ready;
-  //   the operator can delete &name=... to fetch all records of that type.
+  // GET /api/v1/zones/{zoneId}/records?type=TYPE
+  // Lists all records of the given type in the zone.
+  // WHY no &name= filter: zoneId already scopes the query to the exact zone;
+  //   adding a placeholder name would force the operator to edit it before use.
+  //   Omitting name returns all records of that type, which is the most useful
+  //   default — the operator can append &name=... manually if needed.
 
   function buildGetBash(base, zoneId, type, dynamic, zone, token) {
-    var name = recordName(type, zone);
     return (
       'curl -sk -X GET "' + base + '/api/v1/zones/' + zoneId +
-      '/records?type=' + type + '&name=' + name + '" \\\n' +
+      '/records?type=' + type + '" \\\n' +
       '  -H "Authorization: Bearer ' + token + '"'
     );
   }
 
   function buildGetCmd(base, zoneId, type, dynamic, zone, token) {
-    var name = recordName(type, zone);
     return (
       'curl -sk -X GET "' + base + '/api/v1/zones/' + zoneId +
-      '/records?type=' + type + '&name=' + name + '"' +
+      '/records?type=' + type + '"' +
       ' -H "Authorization: Bearer ' + token + '"'
     );
   }
 
   function buildGetPs(base, zoneId, type, dynamic, zone, token) {
-    var name = recordName(type, zone);
     return (
       'curl.exe -sk -X GET "' + base + '/api/v1/zones/' + zoneId +
-      '/records?type=' + type + '&name=' + name + '" `\n' +
+      '/records?type=' + type + '" `\n' +
       '  -H "Authorization: Bearer ' + token + '"'
     );
   }
 
   // --- DELETE builders ---
-  // DELETE /api/v1/records?name=NAME&type=TYPE
+  // DELETE /api/v1/records?name=ZONE_NAME&type=TYPE
   // Deletes a record by name + type (the "delete by name" endpoint).
   // WHY by-name endpoint (not by-ID): the operator typically knows the record name
   //   but not the internal HE zone record ID. The by-name endpoint is more practical
   //   for automation scripts.
+  // WHY use zone (apex) as name: for TXT records this is the correct apex name;
+  //   for A/AAAA/CNAME the zone name is the nearest real value we can supply without
+  //   knowing the subdomain. The operator replaces only the name prefix if needed —
+  //   zone ID, type, and token are already real values requiring no edits.
 
   function buildDeleteBash(base, zoneId, type, dynamic, zone, token) {
-    var name = recordName(type, zone);
     return (
-      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '" \\\n' +
+      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + zone + '&type=' + type + '" \\\n' +
       '  -H "Authorization: Bearer ' + token + '"'
     );
   }
 
   function buildDeleteCmd(base, zoneId, type, dynamic, zone, token) {
-    var name = recordName(type, zone);
     return (
-      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '"' +
+      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + zone + '&type=' + type + '"' +
       ' -H "Authorization: Bearer ' + token + '"'
     );
   }
 
   function buildDeletePs(base, zoneId, type, dynamic, zone, token) {
-    var name = recordName(type, zone);
     return (
-      'curl.exe -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '" `\n' +
+      'curl.exe -sk -X DELETE "' + base + '/api/v1/records?name=' + zone + '&type=' + type + '" `\n' +
       '  -H "Authorization: Bearer ' + token + '"'
     );
   }
