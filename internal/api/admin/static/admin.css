@@ -1031,3 +1031,16 @@ details.zones-collapsible > summary.zones-summary::-webkit-details-marker {
 .about-content a:hover {
   text-decoration: underline;
 }
+
+/* WHY display:block + margin on .about-content img:
+ *   Screenshots rendered via goldmark are inline by default which causes them to
+ *   sit in a text flow context and inherit line-height gaps. block + margin gives
+ *   each screenshot its own breathing room and a consistent border card appearance.
+ */
+.about-content img {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0.75rem 0;
+  display: block;
+}

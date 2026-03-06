@@ -25,7 +25,7 @@ func zoneScopeStr(tok token.TokenRecord) string {
 }
 
 // TokensPage renders the top-level tokens page: list of accounts,
-// each with a "Load Tokens" button that expands token list via htmx.
+// each with a "List Tokens" button that expands token list via htmx.
 //
 // WHY lazy load per account (not all tokens on page load):
 //
@@ -122,7 +122,7 @@ func TokensPage(accounts []model.Account, data PageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" hx-swap=\"innerHTML\">Load Tokens</button></div><div id=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" hx-swap=\"innerHTML\">List Tokens</button></div><div id=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -171,7 +171,7 @@ func TokensPage(accounts []model.Account, data PageData) templ.Component {
 }
 
 // TokensForAccount renders the token list for a single account.
-// Used as the htmx partial response for "Load Tokens" button (GET /admin/tokens/{accountID}).
+// Used as the htmx partial response for "List Tokens" button (GET /admin/tokens/{accountID}).
 // zones is the list of zones for this account, used to populate the zone dropdown in IssueTokenForm.
 func TokensForAccount(accountID string, tokens []token.TokenRecord, zones []model.Zone) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {

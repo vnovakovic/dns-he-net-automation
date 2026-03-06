@@ -17,4 +17,5 @@ import "embed"
 //
 // DEPENDENCY: any new file added to static/ must also be listed here.
 //go:embed static/admin.css static/htmx.min.js static/admin.js static/about.md static/logo.svg
+//go:embed all:static/screenshots
 var staticFS embed.FS

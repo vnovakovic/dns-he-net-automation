@@ -1,4 +1,4 @@
-# DNS HE.NET Automation Portal
+# ES DNS Engine — DNS Automation Portal
 
 **Version {{VERSION}}**
 
@@ -315,3 +315,85 @@ The binary supports issuing tokens without the web UI:
 ```
 
 `--account` resolves by account name. The raw token is printed to stdout.
+
+---
+
+## Getting Started: Typical Workflow
+
+This section walks through the standard workflow for setting up a dns.he.net account and issuing a bearer token for API access.
+
+### Step 1 — Open the portal and log in
+
+Navigate to `https://<host>:9001/admin/login`. Enter your Server Admin credentials (default: `admin` / `admin123`).
+
+![Login page](/admin/static/screenshots/01-login.png)
+
+---
+
+### Step 2 — Register a dns.he.net account
+
+After logging in you land on the **Accounts** page. Click **New Account** to open the registration form.
+
+![Accounts list](/admin/static/screenshots/02-accounts.png)
+
+Fill in a friendly **Account Name** (e.g. `primary`) plus the dns.he.net **username** and **password**, then click **Create Account**.
+
+![Create Account form](/admin/static/screenshots/03-create-account.png)
+
+---
+
+### Step 3 — Load zones from HE.net
+
+Once the account is registered, the zone list is empty. Click **Load zones from HE** to trigger a headless browser session that logs in to dns.he.net and fetches all zones. Zones are cached locally and do not require re-fetching on every page load.
+
+![Empty zones list with Load Zones button](/admin/static/screenshots/04-zones-empty.png)
+
+---
+
+### Step 4 — Issue a bearer token
+
+Navigate to the **Tokens** page. The list shows all tokens for all accounts you have access to.
+
+![Tokens list](/admin/static/screenshots/05-tokens-list.png)
+
+Click **Issue Token** to open the token creation form. Select the target account, choose a role (`admin` for full read/write, `viewer` for read-only), enter a descriptive label, and optionally restrict the token to a single zone or set an expiry.
+
+![Create Token form](/admin/static/screenshots/06-token-create.png)
+
+After submitting, the **raw token** is shown once at the top of the page. Copy it immediately — it will not be shown again unless Token Recovery is enabled.
+
+![Token shown at issuance](/admin/static/screenshots/07-token-issued.png)
+
+---
+
+### Step 5 — Call the REST API
+
+Use the token in the `Authorization` header for all API calls:
+
+```bash
+TOKEN="dns-he-net.primary.admin--<jti>.<jwt>"
+
+# List all zones
+curl -sk https://<host>:9001/api/v1/zones \
+  -H "Authorization: Bearer $TOKEN"
+
+# Create an A record
+curl -sk -X POST https://<host>:9001/api/v1/zones/<zoneID>/records \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"A","name":"www.example.org","content":"1.2.3.4","ttl":300}'
+```
+
+The Accounts page also provides **GET / POST / DELETE curl templates** — click any button on a zone row, paste your token, and get a ready-to-run command for bash, cmd, or PowerShell.
+
+---
+
+### Step 6 — Recover a token if lost
+
+If `TOKEN_RECOVERY_ENABLED=true` (the default), a **Show** button appears on each active token in the Tokens list. Clicking it opens the Token Reveal dialog.
+
+![Token Reveal dialog with Show button and password field](/admin/static/screenshots/08-token-reveal.png)
+
+Enter your portal password to decrypt the stored token value. The token is displayed **masked** by default — click the eye icon to reveal the plaintext. The **Copy** button copies the token to the clipboard without revealing it on screen.
+
+Tokens issued before `TOKEN_RECOVERY_ENABLED` was turned on will not have a Show button. You must revoke those tokens and re-issue new ones to enable recovery.

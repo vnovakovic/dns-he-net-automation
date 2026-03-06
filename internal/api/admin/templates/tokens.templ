@@ -17,7 +17,7 @@ func zoneScopeStr(tok token.TokenRecord) string {
 }
 
 // TokensPage renders the top-level tokens page: list of accounts,
-// each with a "Load Tokens" button that expands token list via htmx.
+// each with a "List Tokens" button that expands token list via htmx.
 //
 // WHY lazy load per account (not all tokens on page load):
 //   An account can have many tokens. Loading all tokens for all accounts on initial
@@ -41,7 +41,7 @@ templ TokensPage(accounts []model.Account, data PageData) {
 						hx-get={ "/admin/tokens/" + acc.ID }
 						hx-target={ "#tokens-" + acc.ID }
 						hx-swap="innerHTML">
-						Load Tokens
+						List Tokens
 					</button>
 				</div>
 				<div id={ "tokens-" + acc.ID }>
@@ -96,7 +96,7 @@ templ TokensPage(accounts []model.Account, data PageData) {
 }
 
 // TokensForAccount renders the token list for a single account.
-// Used as the htmx partial response for "Load Tokens" button (GET /admin/tokens/{accountID}).
+// Used as the htmx partial response for "List Tokens" button (GET /admin/tokens/{accountID}).
 // zones is the list of zones for this account, used to populate the zone dropdown in IssueTokenForm.
 templ TokensForAccount(accountID string, tokens []token.TokenRecord, zones []model.Zone) {
 	<table class="data-table" style="margin-top:0.75rem;">
