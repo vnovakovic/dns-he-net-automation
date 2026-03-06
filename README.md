@@ -85,6 +85,11 @@ docker build -t dns-he-net-automation:latest .
 VERSION=$(cat VERSION)
 docker build -t dns-he-net-automation:$VERSION -t dns-he-net-automation:latest .
 ```
+### Pull Container from Docker HUB
+
+```
+docker pull vnovakov/dns-he-net-automation:0.1.0
+```
 
 ### Run container
 
