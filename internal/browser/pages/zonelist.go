@@ -384,32 +384,6 @@ func (zp *ZoneListPage) ParseRecordRow(rowID string) (*model.Record, error) {
 		Dynamic:  dynamic,
 	}
 
-	// TXT records: HE.net wraps the content in double-quotes in the table row
-	// (zone-file convention, e.g., "this is test"). Strip them so the stored
-	// content matches what callers submit and expect.
-	//
-	// WHY strip here (not in recordsMatch or the handler):
-	//   ParseRecordRow is the single source of truth for scraped content.
-	//   Normalising here means ListRecords, GetRecord, FindRecord (post-create
-	//   lookup), and CreateRecord responses all return unquoted TXT content.
-	//
-	// WHY only strip when BOTH sides are quotes (not strings.Trim):
-	//   Multi-chunk TXT like "chunk1" "chunk2" would become chunk1" "chunk2 with
-	//   Trim. Checking both ends ensures we only unwrap fully-quoted values.
-	//
-	// PREVIOUSLY: without stripping, FindRecord's post-create content comparison
-	//   always failed for TXT records:
-	//     strings.EqualFold("\"this is test\"", "this is test") == false
-	//   → "could not find newly created record after submission" → browser_error
-	//   despite the record being visible on dns.he.net.
-	//   DISCOVERED: 2026-03-04 via user report.
-	if rec.Type == model.RecordTypeTXT &&
-		len(rec.Content) >= 2 &&
-		rec.Content[0] == '"' &&
-		rec.Content[len(rec.Content)-1] == '"' {
-		rec.Content = rec.Content[1 : len(rec.Content)-1]
-	}
-
 	// SRV records: content field holds "Weight Port Target" space-separated.
 	if rec.Type == model.RecordTypeSRV {
 		parts := strings.Fields(content)
@@ -424,6 +398,32 @@ func (zp *ZoneListPage) ParseRecordRow(rowID string) (*model.Record, error) {
 		}
 	} else {
 		rec.Content = content
+	}
+
+	// TXT records: HE.net wraps the content in double-quotes in the table row
+	// (zone-file convention, e.g., "v=spf1 ~all"). Strip them so the stored
+	// content matches what callers submit and expect.
+	//
+	// WHY this block is AFTER the SRV/else content assignment (not before):
+	//   rec.Content is NOT set in the struct literal above — it starts as "".
+	//   The original code placed this block before the else assignment, so it
+	//   always checked len("") >= 2 → false → skipped stripping. Content was then
+	//   assigned with quotes still present. The post-create FindRecord comparison:
+	//     strings.EqualFold("\"v=spf1 ~all\"", "v=spf1 ~all") == false
+	//   caused every TXT create to return browser_error even though the record was
+	//   visible on dns.he.net. Moved AFTER the else block so rec.Content is set first.
+	//   DISCOVERED: 2026-03-06 via code-order audit triggered by user TXT create failure.
+	//
+	// WHY only strip when BOTH sides are quotes (not strings.Trim):
+	//   Multi-chunk TXT like "chunk1" "chunk2" has first='"' and last='"', so it
+	//   would also strip → chunk1" "chunk2. That is still wrong for multi-chunk,
+	//   but it is the same result as before. Single-value TXT (the common case)
+	//   is correctly unquoted. Multi-chunk TXT is a known limitation (TODO).
+	if rec.Type == model.RecordTypeTXT &&
+		len(rec.Content) >= 2 &&
+		rec.Content[0] == '"' &&
+		rec.Content[len(rec.Content)-1] == '"' {
+		rec.Content = rec.Content[1 : len(rec.Content)-1]
 	}
 
 	return rec, nil
