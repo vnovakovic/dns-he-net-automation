@@ -78,33 +78,37 @@ Source: "..\.env.example"; DestDir: "{tmp}"; Flags: deleteafterinstall
 ;   cert exists at the path .env.example expects, so the service starts in
 ;   HTTPS mode out of the box.
 ;
-; WHY PowerShell New-SelfSignedCertificate + certutil:
-;   Go's crypto/tls.ListenAndServeTLS needs PEM files. Windows cert APIs
-;   produce DER/PFX. certutil -encode converts DER → Base64/PEM. For the
-;   private key: New-SelfSignedCertificate stores the key in the Windows
-;   cert store; we export a PFX then extract the key via openssl if available,
-;   or fall back to the server's own gen-cert subcommand.
+; WHY run gen-cert directly (not via PowerShell wrapper):
+;   The server binary gen-cert subcommand is self-contained — no openssl or
+;   PowerShell required. Calling it directly from [Run] is simpler and avoids
+;   PowerShell quoting edge cases. The installer already runs as Administrator
+;   so the binary can write to {app} without elevation tricks.
 ;
-; WHY skipcondition on FileExists:
+; WHY Check: not FileExists:
 ;   Reinstall or upgrade must not overwrite existing certs — that would
 ;   invalidate any client trust anchors or browser exceptions the operator
-;   has already accepted.
+;   has already accepted. The Check condition skips this entry entirely
+;   when server.crt is already present.
 ;
 ; WHY the server binary gen-cert subcommand (not openssl):
 ;   openssl is not installed by default on Windows. The server binary already
-;   links crypto/tls and can generate a self-signed cert with SAN for
-;   localhost and 127.0.0.1 using only the Go standard library.
-;   gen-cert writes server.crt and server.key in PEM format to the install dir.
+;   links crypto/tls and generates a self-signed ECDSA-P256 cert with SAN
+;   for localhost and 127.0.0.1 using only the Go standard library.
 ;
 ; PREVIOUSLY TRIED: bundling certs from project root with skipifsourcedoesntexist.
 ;   Worked for local builds (certs present) but broke CI builds (certs gitignored)
 ;   → service started with SSL_CERT/SSL_KEY pointing to nonexistent files
 ;   → ListenAndServeTLS failed immediately → Error 1067.
-Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -Command ""if (-not (Test-Path '{app}\server.crt')) {{ & '{app}\dnshenet-server.exe' gen-cert --cert '{app}\server.crt' --key '{app}\server.key' }}"""; \
+;
+; PREVIOUSLY TRIED: PowerShell wrapper with Test-Path check.
+;   Worked but was unnecessarily complex — PowerShell quoting inside Inno Setup
+;   Parameters strings is error-prone. Direct binary call is simpler and equivalent.
+Filename: "{app}\dnshenet-server.exe"; \
+  Parameters: "gen-cert --cert ""{app}\server.crt"" --key ""{app}\server.key"""; \
   WorkingDir: "{app}"; \
   StatusMsg: "Generating self-signed TLS certificate..."; \
-  Flags: waituntilterminated
+  Flags: waituntilterminated; \
+  Check: not FileExists(ExpandConstant('{app}\server.crt'))
 
 ; ── Install Windows service ────────────────────────────────────────────────
 ;
