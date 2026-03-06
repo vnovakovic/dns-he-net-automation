@@ -6,7 +6,7 @@ package reconcile
 import (
 	"context"
 
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
 )
 
 // RecordKey is the composite key used to match current and desired records.

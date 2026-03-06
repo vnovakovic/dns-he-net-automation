@@ -11,15 +11,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	playwright "github.com/playwright-community/playwright-go"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/middleware"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
-	"github.com/vnovakov/dns-he-net-automation/internal/audit"
-	"github.com/vnovakov/dns-he-net-automation/internal/bindio"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
-	"github.com/vnovakov/dns-he-net-automation/internal/reconcile"
-	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/middleware"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/response"
+	"github.com/vnovakovic/dns-he-net-automation/internal/audit"
+	"github.com/vnovakovic/dns-he-net-automation/internal/bindio"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser/pages"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/reconcile"
+	"github.com/vnovakovic/dns-he-net-automation/internal/resilience"
 )
 
 // importHTTPResponse is the JSON envelope for POST /import.

@@ -348,7 +348,7 @@ _ = audit.Write(r.Context(), db, audit.Entry{
 // internal/sync/diff.go
 package sync
 
-import "github.com/vnovakov/dns-he-net-automation/internal/model"
+import "github.com/vnovakovic/dns-he-net-automation/internal/model"
 
 // RecordKey uniquely identifies a DNS record for matching purposes.
 // Used as map key for O(n) diff instead of O(n²) nested loop.

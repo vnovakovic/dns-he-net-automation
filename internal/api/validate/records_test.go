@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/validate"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/validate"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
 )
 
 // baseRecord returns a minimally valid model.Record for the given record type.

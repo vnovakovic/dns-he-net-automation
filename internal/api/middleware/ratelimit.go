@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/go-chi/httprate"
-	response "github.com/vnovakov/dns-he-net-automation/internal/api/response"
+	response "github.com/vnovakovic/dns-he-net-automation/internal/api/response"
 )
 
 // PerTokenRateLimit returns chi middleware that limits requests per bearer token.

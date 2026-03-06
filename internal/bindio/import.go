@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/miekg/dns"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
 )
 
 // SkippedRecord represents a record that was not imported.

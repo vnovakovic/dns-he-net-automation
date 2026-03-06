@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
 )
 
 // TestSelectorConstants verifies that all selector constants are non-empty strings.

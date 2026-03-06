@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/response"
 )
 
 // RequireAdmin rejects requests where the authenticated token's role is not "admin".

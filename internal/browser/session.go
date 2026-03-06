@@ -9,9 +9,9 @@ import (
 	"time"
 
 	playwright "github.com/playwright-community/playwright-go"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
-	"github.com/vnovakov/dns-he-net-automation/internal/credential"
-	"github.com/vnovakov/dns-he-net-automation/internal/metrics"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser/pages"
+	"github.com/vnovakovic/dns-he-net-automation/internal/credential"
+	"github.com/vnovakovic/dns-he-net-automation/internal/metrics"
 )
 
 // AccountSession holds the browser state for one HE.net account.

@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/middleware"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
-	"github.com/vnovakov/dns-he-net-automation/internal/token"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/middleware"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/response"
+	"github.com/vnovakovic/dns-he-net-automation/internal/token"
 )
 
 // issueTokenRequest is the JSON body for POST /api/v1/accounts/{accountID}/tokens.

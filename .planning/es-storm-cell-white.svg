@@ -1,0 +1,53 @@
+<svg width="520" height="200" viewBox="0 0 320 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600&amp;family=Exo+2:wght@900&amp;family=Share+Tech+Mono&amp;display=swap');
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="320" height="100" fill="#ffffff" rx="4"/>
+
+  <!-- Storm spiral arms -->
+  <circle cx="44" cy="50" r="37" stroke="#b8d0e0" stroke-width="0.8" stroke-dasharray="3 8" fill="none"/>
+  <path d="M44,14 Q74,22 72,50 Q70,72 44,76" stroke="#80aac0" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M44,20 Q68,28 66,50 Q64,68 44,70" stroke="#5090b0" stroke-width="2"   fill="none" stroke-linecap="round"/>
+  <path d="M44,28 Q62,34 60,50 Q58,63 44,66" stroke="#2070a0" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M44,14 Q14,22 16,50 Q18,72 44,76" stroke="#80aac0" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M44,20 Q20,28 22,50 Q24,68 44,70" stroke="#5090b0" stroke-width="2"   fill="none" stroke-linecap="round"/>
+  <path d="M44,28 Q26,34 28,50 Q30,63 44,66" stroke="#2070a0" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Lightning bolt -->
+  <path d="M48,30 L37,51 L44,51 L38,72 L54,47 L47,47 Z" fill="#0078aa"/>
+
+  <!-- Eye -->
+  <circle cx="44" cy="50" r="3.5" fill="#0088bb"/>
+  <circle cx="44" cy="50" r="1.5" fill="#ffffff"/>
+
+  <!-- ES wordmark -->
+  <text x="102" y="38"
+        font-family="'Exo 2', sans-serif"
+        font-weight="900"
+        font-size="30"
+        fill="#0a1e2e"
+        letter-spacing="-1">ES</text>
+
+  <!-- Divider -->
+  <rect x="102" y="44" width="210" height="1" fill="#c0d8e8"/>
+  <rect x="102" y="44" width="28"  height="1" fill="#0088bb"/>
+
+  <!-- Electric Storm -->
+  <text x="103" y="60"
+        font-family="'Rajdhani', sans-serif"
+        font-weight="600"
+        font-size="14"
+        fill="#006a99"
+        letter-spacing="3">ELECTRIC STORM</text>
+
+  <!-- Tagline -->
+  <text x="103" y="76"
+        font-family="'Share Tech Mono', monospace"
+        font-size="5.2"
+        fill="#8090a0"
+        letter-spacing="1">Helping hand to manage free DNS by Hurricane Electric</text>
+</svg>

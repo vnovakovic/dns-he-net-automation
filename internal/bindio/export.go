@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/miekg/dns"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
 )
 
 // ExportZone converts a slice of model.Record to a BIND zone file string.

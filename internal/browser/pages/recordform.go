@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	playwright "github.com/playwright-community/playwright-go"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
 )
 
 // RecordFormPage provides browser automation for the dns.he.net add/edit record form.

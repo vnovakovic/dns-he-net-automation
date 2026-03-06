@@ -103,7 +103,7 @@ playwright-go v0.5700.1 is the current release (Feb 24, 2026). It is a thin Go c
 
 **Installation (Phase 1 only):**
 ```bash
-go mod init github.com/vnovakov/dns-he-net-automation
+go mod init github.com/vnovakovic/dns-he-net-automation
 
 # Core
 go get github.com/playwright-community/playwright-go@v0.5700.1

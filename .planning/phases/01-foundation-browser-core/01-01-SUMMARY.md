@@ -7,7 +7,7 @@ tags: [go, sqlite, goose, playwright-go, modernc-sqlite, caarlos0-env, slog]
 # Dependency graph
 requires: []
 provides:
-  - Go module github.com/vnovakov/dns-he-net-automation with all Phase 1 dependencies pinned
+  - Go module github.com/vnovakovic/dns-he-net-automation with all Phase 1 dependencies pinned
   - Config struct loading from env vars via caarlos0/env v11 (12-factor, OPS-03)
   - Domain types: Account, Zone, Record with all 17 RecordType constants
   - SQLite store with WAL mode, busy_timeout=5000, foreign_keys=ON (REL-01)

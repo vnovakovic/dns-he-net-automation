@@ -21,16 +21,16 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/vnovakov/dns-he-net-automation/internal/api/admin/templates"
-	"github.com/vnovakov/dns-he-net-automation/internal/audit"
-	"github.com/vnovakov/dns-he-net-automation/internal/bindio"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser/pages"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
-	"github.com/vnovakov/dns-he-net-automation/internal/reconcile"
-	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
-	"github.com/vnovakov/dns-he-net-automation/internal/store"
-	"github.com/vnovakov/dns-he-net-automation/internal/token"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/admin/templates"
+	"github.com/vnovakovic/dns-he-net-automation/internal/audit"
+	"github.com/vnovakovic/dns-he-net-automation/internal/bindio"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser/pages"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/reconcile"
+	"github.com/vnovakovic/dns-he-net-automation/internal/resilience"
+	"github.com/vnovakovic/dns-he-net-automation/internal/store"
+	"github.com/vnovakovic/dns-he-net-automation/internal/token"
 )
 
 // RegisterAdminRoutes mounts the /admin sub-router onto the provided chi.Router.

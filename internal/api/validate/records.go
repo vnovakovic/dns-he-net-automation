@@ -9,7 +9,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
 )
 
 // allowedTTLs is the complete set of TTL values dns.he.net exposes in the

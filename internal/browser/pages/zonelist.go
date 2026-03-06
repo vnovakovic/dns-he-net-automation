@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	playwright "github.com/playwright-community/playwright-go"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
 )
 
 const heNetBaseURL = "https://dns.he.net/"

@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vnovakov/dns-he-net-automation/internal/store"
+	"github.com/vnovakovic/dns-he-net-automation/internal/store"
 )
 
 // TestOpen_InMemory verifies that an in-memory database opens successfully,

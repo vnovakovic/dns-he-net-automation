@@ -10,8 +10,8 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"fmt"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
-	"github.com/vnovakov/dns-he-net-automation/internal/reconcile"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/reconcile"
 )
 
 // SyncPage renders the sync trigger form.

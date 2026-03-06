@@ -133,7 +133,7 @@ PASS  TestRevokeToken_Success
 PASS  TestRevokeToken_NotFound
 PASS  TestListTokens
 PASS  TestListTokens_Empty
-ok  github.com/vnovakov/dns-he-net-automation/internal/token  6.361s
+ok  github.com/vnovakovic/dns-he-net-automation/internal/token  6.361s
 
 go build ./...   — clean build, no errors
 ```

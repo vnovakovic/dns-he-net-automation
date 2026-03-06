@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vnovakov/dns-he-net-automation/internal/config"
+	"github.com/vnovakovic/dns-he-net-automation/internal/config"
 )
 
 func TestLoad_Defaults(t *testing.T) {

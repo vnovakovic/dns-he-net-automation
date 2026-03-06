@@ -10,7 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"fmt"
-	"github.com/vnovakov/dns-he-net-automation/internal/audit"
+	"github.com/vnovakovic/dns-he-net-automation/internal/audit"
 )
 
 // AuditPage renders the audit log table with the first 100 entries and a

@@ -1,4 +1,4 @@
-module github.com/vnovakov/dns-he-net-automation
+module github.com/vnovakovic/dns-he-net-automation
 
 go 1.25.0
 

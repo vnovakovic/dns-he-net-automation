@@ -8,7 +8,7 @@ package templates
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/vnovakov/dns-he-net-automation/internal/model"
+import "github.com/vnovakovic/dns-he-net-automation/internal/model"
 
 // AccountsPage renders the full accounts management page.
 // Each account is a card with nested zones loaded from the DB.

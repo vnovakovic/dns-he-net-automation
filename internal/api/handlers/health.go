@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser"
 )
 
 // HealthResponse is the JSON response body for GET /healthz.

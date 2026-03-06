@@ -27,14 +27,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	playwright "github.com/playwright-community/playwright-go"
-	"github.com/vnovakov/dns-he-net-automation/internal/api"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser"
-	"github.com/vnovakov/dns-he-net-automation/internal/config"
-	"github.com/vnovakov/dns-he-net-automation/internal/credential"
-	"github.com/vnovakov/dns-he-net-automation/internal/metrics"
-	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
-	"github.com/vnovakov/dns-he-net-automation/internal/store"
-	"github.com/vnovakov/dns-he-net-automation/internal/token"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser"
+	"github.com/vnovakovic/dns-he-net-automation/internal/config"
+	"github.com/vnovakovic/dns-he-net-automation/internal/credential"
+	"github.com/vnovakovic/dns-he-net-automation/internal/metrics"
+	"github.com/vnovakovic/dns-he-net-automation/internal/resilience"
+	"github.com/vnovakovic/dns-he-net-automation/internal/store"
+	"github.com/vnovakovic/dns-he-net-automation/internal/token"
 )
 
 func main() {

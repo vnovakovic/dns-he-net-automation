@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/sethvargo/go-retry"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser"
 )
 
 // WithRetry wraps a browser operation with exponential backoff and jitter.

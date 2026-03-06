@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
-	"github.com/vnovakov/dns-he-net-automation/internal/token"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/response"
+	"github.com/vnovakovic/dns-he-net-automation/internal/token"
 )
 
 // contextKey is a private type for context keys in this package.

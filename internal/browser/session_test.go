@@ -10,7 +10,7 @@ import (
 	playwright "github.com/playwright-community/playwright-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vnovakov/dns-he-net-automation/internal/credential"
+	"github.com/vnovakovic/dns-he-net-automation/internal/credential"
 )
 
 // newTestSessionManager creates a SessionManager with a nil Launcher and a minimal

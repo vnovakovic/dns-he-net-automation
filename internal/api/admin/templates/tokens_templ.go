@@ -9,8 +9,8 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
-	"github.com/vnovakov/dns-he-net-automation/internal/token"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/token"
 )
 
 // zoneScopeStr returns a short display string for a token's zone scope.

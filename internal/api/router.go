@@ -11,14 +11,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/admin"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/handlers"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/middleware"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser"
-	"github.com/vnovakov/dns-he-net-automation/internal/metrics"
-	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
-	"github.com/vnovakov/dns-he-net-automation/internal/token"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/admin"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/handlers"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/middleware"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/response"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser"
+	"github.com/vnovakovic/dns-he-net-automation/internal/metrics"
+	"github.com/vnovakovic/dns-he-net-automation/internal/resilience"
+	"github.com/vnovakovic/dns-he-net-automation/internal/token"
 )
 
 // NewRouter builds and returns the chi HTTP router with all middleware and route registrations.

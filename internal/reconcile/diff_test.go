@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vnovakov/dns-he-net-automation/internal/model"
-	"github.com/vnovakov/dns-he-net-automation/internal/reconcile"
+	"github.com/vnovakovic/dns-he-net-automation/internal/model"
+	"github.com/vnovakovic/dns-he-net-automation/internal/reconcile"
 )
 
 // ---------------------------------------------------------------------------

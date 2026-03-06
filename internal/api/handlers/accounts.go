@@ -11,9 +11,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/middleware"
-	"github.com/vnovakov/dns-he-net-automation/internal/api/response"
-	"github.com/vnovakov/dns-he-net-automation/internal/browser"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/middleware"
+	"github.com/vnovakovic/dns-he-net-automation/internal/api/response"
+	"github.com/vnovakovic/dns-he-net-automation/internal/browser"
 )
 
 // accountNamePattern validates account names: 1-64 chars, alphanumeric + dash + underscore (SEC-04).

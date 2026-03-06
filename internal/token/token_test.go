@@ -14,8 +14,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vnovakov/dns-he-net-automation/internal/store"
-	"github.com/vnovakov/dns-he-net-automation/internal/token"
+	"github.com/vnovakovic/dns-he-net-automation/internal/store"
+	"github.com/vnovakovic/dns-he-net-automation/internal/token"
 )
 
 // testSecret is the HMAC-SHA256 secret used across all tests.
