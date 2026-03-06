@@ -5,12 +5,20 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -78,6 +86,32 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("Done.")
+		return
+	}
+
+	// gen-cert subcommand: generates a self-signed TLS certificate + private key in PEM format.
+	// Called by the Inno Setup installer [Run] section when server.crt does not yet exist.
+	//
+	// Usage:
+	//   dnshenet-server.exe gen-cert --cert <path.crt> --key <path.key>
+	//
+	// WHY a subcommand instead of bundling certs from the project root:
+	//   server.crt and server.key are gitignored — CI builds never have them, so the
+	//   Inno Setup installer cannot bundle them. Each install needs its own key pair.
+	//   Generating at install time is the correct approach: unique per deployment,
+	//   no secrets in the repo, works from both local and CI builds.
+	//
+	// WHY Go crypto/tls (not openssl):
+	//   openssl is not installed by default on Windows. The binary already links
+	//   crypto/x509 and crypto/tls, so no extra dependency is introduced.
+	//   The cert gets SAN entries for localhost and 127.0.0.1 so browsers accept it
+	//   when accessed locally (CN alone is ignored by modern browsers for TLS validation).
+	//
+	// PREVIOUSLY TRIED: skipifsourcedoesntexist in the .iss [Files] section.
+	//   Worked for local builds but broke CI (certs gitignored) → ListenAndServeTLS
+	//   failed with "no such file" on first service start → Error 1067.
+	if len(os.Args) >= 2 && os.Args[1] == "gen-cert" {
+		runGenCert(os.Args[2:])
 		return
 	}
 
@@ -486,6 +520,86 @@ func loadEnvFile() {
 }
 
 // writeEarlyDebug appends a timestamped message to C:\dnshenet-early.log.
+// runGenCert generates a self-signed ECDSA-P256 TLS certificate + private key in PEM format.
+// Called by the Inno Setup installer when server.crt does not exist at the install path.
+//
+// WHY ECDSA-P256 (not RSA 2048):
+//   Smaller key, faster handshake, equivalent security. Supported by all modern TLS stacks.
+//   RSA 2048 would also work but is slower and produces a larger key file.
+//
+// WHY SAN for localhost and 127.0.0.1 (not just CN):
+//   Modern browsers and Go's tls.Dial ignore CN for validation — they only check SAN.
+//   Without a SAN entry for localhost/127.0.0.1, curl and browsers reject the cert even
+//   if the CN matches. Both the DNS name and IP forms are included to cover all access patterns.
+func runGenCert(args []string) {
+	fs := flag.NewFlagSet("gen-cert", flag.ExitOnError)
+	certPath := fs.String("cert", "server.crt", "path to write the PEM certificate")
+	keyPath := fs.String("key", "server.key", "path to write the PEM private key")
+	if err := fs.Parse(args); err != nil {
+		os.Exit(1)
+	}
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gen-cert: generate key: %v\n", err)
+		os.Exit(1)
+	}
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gen-cert: serial: %v\n", err)
+		os.Exit(1)
+	}
+
+	tmpl := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "dnshenet-server"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(10 * 365 * 24 * time.Hour), // 10 years
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{"localhost"},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gen-cert: create certificate: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Write certificate PEM.
+	certFile, err := os.Create(*certPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gen-cert: create %s: %v\n", *certPath, err)
+		os.Exit(1)
+	}
+	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+		fmt.Fprintf(os.Stderr, "gen-cert: write cert PEM: %v\n", err)
+		os.Exit(1)
+	}
+	certFile.Close()
+
+	// Write private key PEM.
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gen-cert: marshal key: %v\n", err)
+		os.Exit(1)
+	}
+	keyFile, err := os.Create(*keyPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gen-cert: create %s: %v\n", *keyPath, err)
+		os.Exit(1)
+	}
+	if err := pem.Encode(keyFile, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}); err != nil {
+		fmt.Fprintf(os.Stderr, "gen-cert: write key PEM: %v\n", err)
+		os.Exit(1)
+	}
+	keyFile.Close()
+
+	fmt.Printf("Generated self-signed certificate:\n  cert: %s\n  key:  %s\n  valid: 10 years\n", *certPath, *keyPath)
+}
+
 // Used for diagnosing service startup failures before slog is configured.
 // Remove once the service starts reliably.
 func writeEarlyDebug(msg string) {

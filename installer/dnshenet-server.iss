@@ -69,6 +69,43 @@ Source: "..\server.key"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoes
 Source: "..\.env.example"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Run]
+; ── Generate self-signed TLS certificate (if not already present) ──────────
+;
+; WHY generate cert here (not bundle from source):
+;   server.crt and server.key are gitignored — CI builds never have them.
+;   Bundling certs from the dev machine would be wrong anyway (each install
+;   should have its own key pair). Generating at install time ensures the
+;   cert exists at the path .env.example expects, so the service starts in
+;   HTTPS mode out of the box.
+;
+; WHY PowerShell New-SelfSignedCertificate + certutil:
+;   Go's crypto/tls.ListenAndServeTLS needs PEM files. Windows cert APIs
+;   produce DER/PFX. certutil -encode converts DER → Base64/PEM. For the
+;   private key: New-SelfSignedCertificate stores the key in the Windows
+;   cert store; we export a PFX then extract the key via openssl if available,
+;   or fall back to the server's own gen-cert subcommand.
+;
+; WHY skipcondition on FileExists:
+;   Reinstall or upgrade must not overwrite existing certs — that would
+;   invalidate any client trust anchors or browser exceptions the operator
+;   has already accepted.
+;
+; WHY the server binary gen-cert subcommand (not openssl):
+;   openssl is not installed by default on Windows. The server binary already
+;   links crypto/tls and can generate a self-signed cert with SAN for
+;   localhost and 127.0.0.1 using only the Go standard library.
+;   gen-cert writes server.crt and server.key in PEM format to the install dir.
+;
+; PREVIOUSLY TRIED: bundling certs from project root with skipifsourcedoesntexist.
+;   Worked for local builds (certs present) but broke CI builds (certs gitignored)
+;   → service started with SSL_CERT/SSL_KEY pointing to nonexistent files
+;   → ListenAndServeTLS failed immediately → Error 1067.
+Filename: "powershell.exe"; \
+  Parameters: "-NoProfile -Command ""if (-not (Test-Path '{app}\server.crt')) {{ & '{app}\dnshenet-server.exe' gen-cert --cert '{app}\server.crt' --key '{app}\server.key' }}"""; \
+  WorkingDir: "{app}"; \
+  StatusMsg: "Generating self-signed TLS certificate..."; \
+  Flags: waituntilterminated
+
 ; ── Install Windows service ────────────────────────────────────────────────
 ;
 ; WHY quoted inner path in binPath:
