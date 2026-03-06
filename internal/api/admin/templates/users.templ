@@ -88,7 +88,10 @@ templ UsersPage(users []UserRow, data PageData, currentUserID string) {
 						</div>
 						<div class="form-group">
 							<label for="password">Password</label>
-							<input type="password" id="password" name="password" placeholder="login password" required/>
+							<div class="pw-field">
+								<input type="password" id="password" name="password" placeholder="login password" required/>
+								@PwToggle()
+							</div>
 						</div>
 						<button type="submit" class="btn btn-primary">Register</button>
 					</div>
@@ -103,15 +106,24 @@ templ UsersPage(users []UserRow, data PageData, currentUserID string) {
 					<div class="form-row">
 						<div class="form-group">
 							<label>Current password</label>
-							<input type="password" name="current_password" required/>
+							<div class="pw-field">
+								<input type="password" name="current_password" required/>
+								@PwToggle()
+							</div>
 						</div>
 						<div class="form-group">
 							<label>New password</label>
-							<input type="password" name="new_password" placeholder="min 8 characters" required/>
+							<div class="pw-field">
+								<input type="password" name="new_password" placeholder="min 8 characters" required/>
+								@PwToggle()
+							</div>
 						</div>
 						<div class="form-group">
 							<label>Confirm new password</label>
-							<input type="password" name="confirm_password" required/>
+							<div class="pw-field">
+								<input type="password" name="confirm_password" required/>
+								@PwToggle()
+							</div>
 						</div>
 						<button type="submit" class="btn btn-primary">Change Password</button>
 					</div>
@@ -127,15 +139,24 @@ templ UsersPage(users []UserRow, data PageData, currentUserID string) {
 					<div class="form-row">
 						<div class="form-group">
 							<label>Current password</label>
-							<input type="password" name="current_password" required/>
+							<div class="pw-field">
+								<input type="password" name="current_password" required/>
+								@PwToggle()
+							</div>
 						</div>
 						<div class="form-group">
 							<label>New password</label>
-							<input type="password" name="new_password" placeholder="min 8 characters" required/>
+							<div class="pw-field">
+								<input type="password" name="new_password" placeholder="min 8 characters" required/>
+								@PwToggle()
+							</div>
 						</div>
 						<div class="form-group">
 							<label>Confirm new password</label>
-							<input type="password" name="confirm_password" required/>
+							<div class="pw-field">
+								<input type="password" name="confirm_password" required/>
+								@PwToggle()
+							</div>
 						</div>
 						<button type="submit" class="btn btn-primary">Change Password</button>
 					</div>
@@ -167,8 +188,14 @@ templ UserTableRow(u UserRow, isAdmin bool) {
 				<div style="display:inline-flex;gap:0.25rem;align-items:center;">
 					<div id={ "user-pw-error-" + u.ID }></div>
 					<form hx-post={ "/admin/users/" + u.ID + "/password" } hx-on::after-request="this.reset()" style="display:inline-flex;gap:0.25rem;">
-						<input type="password" name="new_password" placeholder="new password" style="width:9rem;"/>
-						<input type="password" name="confirm_password" placeholder="confirm" style="width:7rem;"/>
+						<div class="pw-field" style="width:9rem;">
+							<input type="password" name="new_password" placeholder="new password"/>
+							@PwToggle()
+						</div>
+						<div class="pw-field" style="width:7rem;">
+							<input type="password" name="confirm_password" placeholder="confirm"/>
+							@PwToggle()
+						</div>
 						<button type="submit" class="btn btn-sm">Reset</button>
 					</form>
 				</div>

@@ -187,38 +187,94 @@ func UsersPage(users []UserRow, data PageData, currentUserID string) templ.Compo
 				return templ_7745c5c3_Err
 			}
 			if data.IsAdmin {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"card\" style=\"margin-bottom:1rem;\"><h3>Register User</h3><p class=\"text-muted\">Create a login for an operator. They will only see their own dns.he.net accounts.</p><div id=\"user-register-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/users\" hx-target=\"#users-table-body\" hx-swap=\"beforeend\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"username\">Username</label> <input type=\"text\" id=\"username\" name=\"username\" placeholder=\"e.g. alice\" required></div><div class=\"form-group\"><label for=\"password\">Password</label> <input type=\"password\" id=\"password\" name=\"password\" placeholder=\"login password\" required></div><button type=\"submit\" class=\"btn btn-primary\">Register</button></div></form></div> <div class=\"card\" style=\"margin-bottom:1rem;\"><h3>Change Admin Password</h3><p class=\"text-muted\">Change the server admin login password. Takes effect on the next login.</p><div id=\"admin-pw-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/change-admin-password\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label>Current password</label> <input type=\"password\" name=\"current_password\" required></div><div class=\"form-group\"><label>New password</label> <input type=\"password\" name=\"new_password\" placeholder=\"min 8 characters\" required></div><div class=\"form-group\"><label>Confirm new password</label> <input type=\"password\" name=\"confirm_password\" required></div><button type=\"submit\" class=\"btn btn-primary\">Change Password</button></div></form></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"card\" style=\"margin-bottom:1rem;\"><h3>Register User</h3><p class=\"text-muted\">Create a login for an operator. They will only see their own dns.he.net accounts.</p><div id=\"user-register-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/users\" hx-target=\"#users-table-body\" hx-swap=\"beforeend\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"username\">Username</label> <input type=\"text\" id=\"username\" name=\"username\" placeholder=\"e.g. alice\" required></div><div class=\"form-group\"><label for=\"password\">Password</label><div class=\"pw-field\"><input type=\"password\" id=\"password\" name=\"password\" placeholder=\"login password\" required>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = PwToggle().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div><button type=\"submit\" class=\"btn btn-primary\">Register</button></div></form></div> <div class=\"card\" style=\"margin-bottom:1rem;\"><h3>Change Admin Password</h3><p class=\"text-muted\">Change the server admin login password. Takes effect on the next login.</p><div id=\"admin-pw-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/change-admin-password\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label>Current password</label><div class=\"pw-field\"><input type=\"password\" name=\"current_password\" required>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = PwToggle().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div><div class=\"form-group\"><label>New password</label><div class=\"pw-field\"><input type=\"password\" name=\"new_password\" placeholder=\"min 8 characters\" required>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = PwToggle().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div><div class=\"form-group\"><label>Confirm new password</label><div class=\"pw-field\"><input type=\"password\" name=\"confirm_password\" required>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = PwToggle().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div><button type=\"submit\" class=\"btn btn-primary\">Change Password</button></div></form></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, " <div class=\"card\" style=\"margin-bottom:1rem;\"><h3>Change My Password</h3><p class=\"text-muted\">Change your login password.</p><div id=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, " <div class=\"card\" style=\"margin-bottom:1rem;\"><h3>Change My Password</h3><p class=\"text-muted\">Change your login password.</p><div id=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs("user-pw-error-" + currentUserID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 125, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 137, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/users/" + currentUserID + "/password")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 126, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 138, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label>Current password</label> <input type=\"password\" name=\"current_password\" required></div><div class=\"form-group\"><label>New password</label> <input type=\"password\" name=\"new_password\" placeholder=\"min 8 characters\" required></div><div class=\"form-group\"><label>Confirm new password</label> <input type=\"password\" name=\"confirm_password\" required></div><button type=\"submit\" class=\"btn btn-primary\">Change Password</button></div></form></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label>Current password</label><div class=\"pw-field\"><input type=\"password\" name=\"current_password\" required>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = PwToggle().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div></div><div class=\"form-group\"><label>New password</label><div class=\"pw-field\"><input type=\"password\" name=\"new_password\" placeholder=\"min 8 characters\" required>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = PwToggle().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</div></div><div class=\"form-group\"><label>Confirm new password</label><div class=\"pw-field\"><input type=\"password\" name=\"confirm_password\" required>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = PwToggle().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div></div><button type=\"submit\" class=\"btn btn-primary\">Change Password</button></div></form></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -257,95 +313,111 @@ func UserTableRow(u UserRow, isAdmin bool) templ.Component {
 			templ_7745c5c3_Var9 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<tr><td>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<tr><td>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(u.Username)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 153, Col: 18}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 174, Col: 18}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</td><td>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</td><td>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(u.CreatedAt.Format("2006-01-02"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 154, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 175, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</td><td style=\"display:flex;gap:0.35rem;flex-wrap:wrap;\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</td><td style=\"display:flex;gap:0.35rem;flex-wrap:wrap;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if isAdmin {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<button class=\"btn btn-danger btn-sm\" hx-delete=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<button class=\"btn btn-danger btn-sm\" hx-delete=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/users/" + u.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 159, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 180, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML swap:500ms\" hx-confirm=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML swap:500ms\" hx-confirm=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs("Remove user '" + u.Username + "' and all their accounts?")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 162, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 183, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\">Remove</button>  <div style=\"display:inline-flex;gap:0.25rem;align-items:center;\"><div id=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\">Remove</button>  <div style=\"display:inline-flex;gap:0.25rem;align-items:center;\"><div id=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs("user-pw-error-" + u.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 168, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 189, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\"></div><form hx-post=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"></div><form hx-post=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/users/" + u.ID + "/password")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 169, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 190, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" hx-on::after-request=\"this.reset()\" style=\"display:inline-flex;gap:0.25rem;\"><input type=\"password\" name=\"new_password\" placeholder=\"new password\" style=\"width:9rem;\"> <input type=\"password\" name=\"confirm_password\" placeholder=\"confirm\" style=\"width:7rem;\"> <button type=\"submit\" class=\"btn btn-sm\">Reset</button></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" hx-on::after-request=\"this.reset()\" style=\"display:inline-flex;gap:0.25rem;\"><div class=\"pw-field\" style=\"width:9rem;\"><input type=\"password\" name=\"new_password\" placeholder=\"new password\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = PwToggle().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</div><div class=\"pw-field\" style=\"width:7rem;\"><input type=\"password\" name=\"confirm_password\" placeholder=\"confirm\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = PwToggle().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</div><button type=\"submit\" class=\"btn btn-sm\">Reset</button></form></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</td></tr>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</td></tr>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -385,7 +457,7 @@ func UserRegisterSuccess(u UserRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div id=\"user-register-error\" hx-swap-oob=\"true\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<div id=\"user-register-error\" hx-swap-oob=\"true\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -418,20 +490,20 @@ func UserRegisterError(msg string) templ.Component {
 			templ_7745c5c3_Var17 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<p class=\"error-banner\" style=\"margin:0;\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<p class=\"error-banner\" style=\"margin:0;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 196, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/users.templ`, Line: 223, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

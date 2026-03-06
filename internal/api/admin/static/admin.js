@@ -318,6 +318,53 @@
   });
 })();
 
+// ─── Password show/hide toggle ────────────────────────────────────────────────
+// togglePw is called by onclick="togglePw(this)" on .pw-toggle buttons.
+//
+// HOW IT WORKS:
+//   The button is always the immediate next sibling of the password input inside
+//   a .pw-field wrapper. previousElementSibling gives the input without needing an id.
+//   Toggling input.type between "password" and "text" reveals / hides the value.
+//   The button innerHTML is swapped between an eye-open and eye-off SVG icon.
+//
+// WHY previousElementSibling (not a querySelector by id):
+//   Multiple password fields can exist on the same page (e.g. current/new/confirm).
+//   ID lookups would require unique IDs on every input; sibling traversal requires none.
+//
+// WHY SVG inline strings in JS (not CSS background-image):
+//   SVG icon needs to change on every toggle click. Swapping innerHTML is simpler
+//   than maintaining two CSS classes with separate background-image rules.
+
+(function () {
+  function eyeOnSvg() {
+    // Eye open — shown when the field is type="password" (value hidden, click to reveal).
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"' +
+      ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>' +
+      '<circle cx="12" cy="12" r="3"/>' +
+      '</svg>';
+  }
+
+  function eyeOffSvg() {
+    // Eye with slash — shown when the field is type="text" (value visible, click to hide).
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"' +
+      ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>' +
+      '<path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>' +
+      '<path d="M6.34 6.34L17.66 17.66"/>' +
+      '</svg>';
+  }
+
+  window.togglePw = function (btn) {
+    var input = btn.previousElementSibling;
+    if (!input) return;
+    var show = (input.type === 'password');
+    input.type = show ? 'text' : 'password';
+    btn.innerHTML = show ? eyeOffSvg() : eyeOnSvg();
+    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  };
+})();
+
 // ─── Token reveal dialog ──────────────────────────────────────────────────────
 // showRevealDialog, submitReveal, and copyRevealToken implement the "Show token"
 // flow on the Tokens page. They are only reachable when TOKEN_RECOVERY_ENABLED=true

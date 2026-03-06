@@ -57,7 +57,10 @@ templ TokensPage(accounts []model.Account, data PageData) {
 			</div>
 			<div class="curl-dialog-token">
 				<label for="reveal-password">Portal password</label>
-				<input id="reveal-password" type="password" placeholder="your admin / account password" autocomplete="current-password"/>
+				<div class="pw-field" style="flex:1;">
+					<input id="reveal-password" type="password" placeholder="your admin / account password" autocomplete="current-password"/>
+					@PwToggle()
+				</div>
 			</div>
 			<div style="padding:0 1rem 0.75rem;">
 				<button class="btn btn-primary btn-sm" onclick="submitReveal()">Reveal token</button>

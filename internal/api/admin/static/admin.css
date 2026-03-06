@@ -836,6 +836,48 @@ details.zones-collapsible > summary.zones-summary::-webkit-details-marker {
 }
 
 /* ============================================================
+   Password field with show/hide eye toggle (.pw-field / .pw-toggle)
+   WHY wrapper div (not position:relative on the input itself):
+     Inputs cannot contain child elements, so the eye button must be a sibling.
+     A wrapper div with position:relative is the standard pattern for overlaying
+     a button inside the input's visual boundary without affecting the input's width.
+   DEPENDENCY: togglePw() in admin.js reads btn.previousElementSibling to find
+     the input — the button must always be the immediate next sibling of the input.
+   ============================================================ */
+.pw-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Input inside a pw-field fills the wrapper and leaves right padding for the eye. */
+.pw-field input[type="password"],
+.pw-field input[type="text"] {
+  flex: 1;
+  width: 100%;
+  padding-right: 2.2rem;
+}
+
+/* Eye button — sits in the right margin area of the input. */
+.pw-toggle {
+  position: absolute;
+  right: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  padding: 2px 3px;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pw-toggle:hover {
+  color: var(--foreground);
+}
+
+/* ============================================================
    Responsive — Sidebar collapses at <= 768px
    ============================================================ */
 @media (max-width: 768px) {

@@ -69,6 +69,28 @@ templ Layout(data PageData) {
 	</html>
 }
 
+// PwToggle renders the show/hide eye button placed inside a .pw-field wrapper.
+//
+// WHY a shared component (not inlined in every template):
+//   The SVG eye icon is 200+ chars; repeating it across 12 password fields would bloat
+//   every template file. A single component keeps changes in one place.
+//
+// WHY initial state = eye-open (show icon):
+//   The input starts as type="password" (hidden), so the first action is "reveal" —
+//   the open eye communicates "click to see". JS togglePw() in admin.js swaps to the
+//   eye-off icon when the password is revealed.
+//
+// DEPENDENCY: admin.js must define window.togglePw — see togglePw() in admin.js.
+//   login.templ also loads admin.js so the toggle works on the login page too.
+templ PwToggle() {
+	<button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1" aria-label="Show password">
+		<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+			<circle cx="12" cy="12" r="3"></circle>
+		</svg>
+	</button>
+}
+
 // NavLink renders a sidebar navigation link with active state styling.
 // Separating active/inactive into two branches avoids a runtime conditional attribute
 // on class — templ prefers explicit branching for clarity and XSS safety.

@@ -15,6 +15,11 @@ package templates
 //   Avoids the complexity of a flash cookie system. POST /admin/login re-renders
 //   this template with the error string on failure, then redirects on success.
 //   Simple, stateless, no additional storage needed.
+//
+// WHY admin.js is loaded here (not just in Layout):
+//   Login page does not use Layout (no sidebar/header needed). admin.js is loaded
+//   explicitly so the PwToggle eye button works on the login page too.
+//   The form still submits without JS — admin.js is a progressive enhancement only.
 templ LoginPage(errorMsg string) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -23,6 +28,7 @@ templ LoginPage(errorMsg string) {
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>Login | DNS Admin</title>
 			<link rel="stylesheet" href="/admin/static/admin.css"/>
+			<script src="/admin/static/admin.js" defer></script>
 		</head>
 		<body class="login-page">
 			<div class="login-card card">
@@ -37,7 +43,10 @@ templ LoginPage(errorMsg string) {
 					</div>
 					<div class="form-group">
 						<label for="password">Password</label>
-						<input type="password" id="password" name="password" required/>
+						<div class="pw-field">
+							<input type="password" id="password" name="password" required/>
+							@PwToggle()
+						</div>
 					</div>
 					<button type="submit" class="btn btn-primary">Sign In</button>
 				</form>
