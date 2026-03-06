@@ -351,7 +351,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				if z.ID != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div class=\"tpl-section\"><div class=\"tpl-row tpl-row-first\"><span class=\"tpl-method-label tpl-method-post\">POST</span> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div class=\"tpl-section\"><div class=\"tpl-row tpl-row-first\"><span class=\"tpl-method-label tpl-method-get\">GET</span> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -377,7 +377,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" data-type=\"A\" data-method=\"POST\" onclick=\"showCurlTemplate(this)\" title=\"A record\">A</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" data-type=\"A\" data-method=\"GET\" onclick=\"showCurlTemplate(this)\" title=\"GET A records\">A</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -403,7 +403,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" data-type=\"A\" data-method=\"POST\" data-dynamic=\"true\" onclick=\"showCurlTemplate(this)\" title=\"A record with Dynamic DDNS\">A+</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" data-type=\"A\" data-method=\"GET\" data-dynamic=\"true\" onclick=\"showCurlTemplate(this)\" title=\"GET A records (dynamic)\">A+</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -429,7 +429,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\" data-type=\"AAAA\" data-method=\"POST\" onclick=\"showCurlTemplate(this)\" title=\"AAAA record\">AAAA</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\" data-type=\"AAAA\" data-method=\"GET\" onclick=\"showCurlTemplate(this)\" title=\"GET AAAA records\">AAAA</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -455,7 +455,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" data-type=\"CNAME\" data-method=\"POST\" onclick=\"showCurlTemplate(this)\" title=\"CNAME record\">CNAME</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" data-type=\"CNAME\" data-method=\"GET\" onclick=\"showCurlTemplate(this)\" title=\"GET CNAME records\">CNAME</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -481,7 +481,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" data-type=\"TXT\" data-method=\"POST\" onclick=\"showCurlTemplate(this)\" title=\"TXT record\">TXT</button></div><div class=\"tpl-row\"><span class=\"tpl-method-label tpl-method-get\">GET</span> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" data-type=\"TXT\" data-method=\"GET\" onclick=\"showCurlTemplate(this)\" title=\"GET TXT records\">TXT</button></div><div class=\"tpl-row\"><span class=\"tpl-method-label tpl-method-post\">POST</span> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -507,7 +507,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" data-type=\"A\" data-method=\"GET\" onclick=\"showCurlTemplate(this)\" title=\"GET A records\">A</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" data-type=\"A\" data-method=\"POST\" onclick=\"showCurlTemplate(this)\" title=\"A record\">A</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -533,7 +533,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" data-type=\"A\" data-method=\"GET\" data-dynamic=\"true\" onclick=\"showCurlTemplate(this)\" title=\"GET A records (dynamic)\">A+</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" data-type=\"A\" data-method=\"POST\" data-dynamic=\"true\" onclick=\"showCurlTemplate(this)\" title=\"A record with Dynamic DDNS\">A+</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -559,7 +559,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" data-type=\"AAAA\" data-method=\"GET\" onclick=\"showCurlTemplate(this)\" title=\"GET AAAA records\">AAAA</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" data-type=\"AAAA\" data-method=\"POST\" onclick=\"showCurlTemplate(this)\" title=\"AAAA record\">AAAA</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -585,7 +585,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" data-type=\"CNAME\" data-method=\"GET\" onclick=\"showCurlTemplate(this)\" title=\"GET CNAME records\">CNAME</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" data-type=\"CNAME\" data-method=\"POST\" onclick=\"showCurlTemplate(this)\" title=\"CNAME record\">CNAME</button> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -611,7 +611,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" data-type=\"TXT\" data-method=\"GET\" onclick=\"showCurlTemplate(this)\" title=\"GET TXT records\">TXT</button></div><div class=\"tpl-row\"><span class=\"tpl-method-label tpl-method-delete\">DELETE</span> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" data-type=\"TXT\" data-method=\"POST\" onclick=\"showCurlTemplate(this)\" title=\"TXT record\">TXT</button></div><div class=\"tpl-row\"><span class=\"tpl-method-label tpl-method-delete\">DELETE</span> <button class=\"btn btn-sm tpl-btn\" data-zone=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
