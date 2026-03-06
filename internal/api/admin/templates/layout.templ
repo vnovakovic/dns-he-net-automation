@@ -41,7 +41,14 @@ templ Layout(data PageData) {
 		</head>
 		<body class="app-shell">
 			<nav class="sidebar">
-				<div class="sidebar-logo">DNS Admin</div>
+				// WHY <img> for the logo (not inline SVG):
+				//   logo.svg is embedded in staticFS and served at /admin/static/logo.svg.
+				//   Using <img> keeps the templ file clean and lets the browser cache the asset.
+				//   The SVG is a dark-sidebar variant of .planning/es-storm-cell-white.svg with
+				//   text and accent colours adapted for the dark #18181b sidebar background.
+				<div class="sidebar-logo">
+					<img src="/admin/static/logo.svg" alt="Electric Storm — DNS Portal" style="width:100%;max-width:208px;display:block;"/>
+				</div>
 				@NavLink("/admin/accounts", "Accounts", data.ActivePage == "accounts")
 				@NavLink("/admin/tokens", "Tokens", data.ActivePage == "tokens")
 				@NavLink("/admin/zones", "Zones", data.ActivePage == "zones")

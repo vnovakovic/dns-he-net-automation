@@ -134,13 +134,15 @@ body.app-shell {
 }
 
 .sidebar-logo {
-  padding: 20px 16px 16px;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--sidebar-fg);
-  letter-spacing: 0.02em;
+  padding: 14px 14px 12px;
   border-bottom: 1px solid var(--sidebar-border);
   margin-bottom: 8px;
+}
+
+.sidebar-logo img {
+  display: block;
+  width: 100%;
+  max-width: 208px;
 }
 
 .sidebar-section-label {

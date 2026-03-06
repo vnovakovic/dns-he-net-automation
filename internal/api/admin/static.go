@@ -16,5 +16,5 @@ import "embed"
 // the http.FileServer call in router.go. The embed glob must match actual filenames.
 //
 // DEPENDENCY: any new file added to static/ must also be listed here.
-//go:embed static/admin.css static/htmx.min.js static/admin.js static/about.md
+//go:embed static/admin.css static/htmx.min.js static/admin.js static/about.md static/logo.svg
 var staticFS embed.FS
