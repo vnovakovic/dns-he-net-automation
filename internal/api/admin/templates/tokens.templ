@@ -69,7 +69,24 @@ templ TokensPage(accounts []model.Account, data PageData) {
 				<button class="btn btn-primary btn-sm" onclick="submitReveal()">Reveal token</button>
 				<span id="reveal-error" class="error-banner" style="margin-left:0.5rem;display:none;"></span>
 			</div>
-			<pre id="reveal-token-value" class="curl-cmd" style="display:none;"></pre>
+			// WHY input[type=password] + eye toggle (not a <pre>):
+			//   Showing the token as plain text is a shoulder-surfing / screenshot risk.
+			//   A password input masks the value with bullets so bystanders cannot read it.
+			//   The eye toggle lets the operator reveal it deliberately, same UX as all other
+			//   password fields in the admin UI. Copy still works on the masked value because
+			//   clipboard.writeText reads input.value, not the rendered bullet characters.
+			<div id="reveal-token-wrapper" style="display:none;padding:0 1rem 0.75rem;">
+				<div class="pw-field">
+					<input
+						id="reveal-token-value"
+						type="password"
+						readonly
+						autocomplete="off"
+						spellcheck="false"
+						style="font-family:monospace;font-size:0.82em;letter-spacing:0.02em;"/>
+					@PwToggle()
+				</div>
+			</div>
 			<div class="curl-dialog-footer">
 				<button id="reveal-copy-btn" class="btn btn-primary btn-sm" style="display:none;" onclick="copyRevealToken()">Copy</button>
 				<button class="btn btn-sm" onclick="document.getElementById('reveal-dialog').close()">Close</button>

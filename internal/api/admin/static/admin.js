@@ -399,8 +399,14 @@
     document.getElementById('reveal-password').value = '';
     document.getElementById('reveal-error').style.display = 'none';
     document.getElementById('reveal-error').textContent = '';
-    document.getElementById('reveal-token-value').style.display = 'none';
-    document.getElementById('reveal-token-value').textContent = '';
+    // Reset token input: clear value, restore hidden state (type=password) and eye icon.
+    // WHY check type before calling togglePw:
+    //   togglePw always toggles — calling it when already type=password would reveal.
+    //   We only call it when type=text (operator had previously revealed) to flip back.
+    var tokenInput = document.getElementById('reveal-token-value');
+    if (tokenInput.type === 'text') { window.togglePw(tokenInput.nextElementSibling); }
+    tokenInput.value = '';
+    document.getElementById('reveal-token-wrapper').style.display = 'none';
     document.getElementById('reveal-copy-btn').style.display = 'none';
 
     document.getElementById('reveal-dialog-label').textContent = jti.slice(0, 8) + '...';
@@ -432,8 +438,8 @@
           });
         }
         return resp.text().then(function (rawToken) {
-          preEl.textContent = rawToken;
-          preEl.style.display = 'block';
+          preEl.value = rawToken;
+          document.getElementById('reveal-token-wrapper').style.display = 'block';
           copyBtn.style.display = 'inline-block';
         });
       })
@@ -444,7 +450,7 @@
   };
 
   window.copyRevealToken = function () {
-    var text = document.getElementById('reveal-token-value').textContent;
+    var text = document.getElementById('reveal-token-value').value;
     var btn = document.getElementById('reveal-copy-btn');
     var orig = btn.textContent;
     var done = function () {
