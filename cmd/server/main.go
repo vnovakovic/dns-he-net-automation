@@ -180,6 +180,30 @@ func main() {
 
 	slog.Info("database ready", "db_path", cfg.DBPath)
 
+	// Resolve admin password: if ADMIN_PASSWORD env var is set, bcrypt-hash it and upsert
+	// to the DB (env var overrides DB). If empty, read the stored hash from the DB; on a
+	// fresh DB with no hash, seed the default "admin123" bcrypt hash.
+	//
+	// WHY resolve here (after DB open, before router init):
+	//   The router receives the bcrypt hash directly — it never reads the env var or DB.
+	//   Centralising the resolution here makes the auth layer stateless with respect to
+	//   the DB: once the hash is in the router, password checks are pure in-memory bcrypt.
+	//
+	// WHY pass the hash (not plaintext) into the router:
+	//   Passing plaintext into the router would require it to be stored in a closure for
+	//   the lifetime of the server process. A bcrypt hash is safe to store in memory —
+	//   even a memory dump reveals only the hash, not the password.
+	adminPasswordHash, err := store.EnsureAdminPassword(context.Background(), db, cfg.AdminPassword)
+	if err != nil {
+		slog.Error("failed to resolve admin password", "error", err)
+		os.Exit(1)
+	}
+	if cfg.AdminPassword != "" {
+		slog.Info("admin password set from environment variable (ADMIN_PASSWORD)")
+	} else {
+		slog.Info("admin password loaded from database")
+	}
+
 	// Initialize credential provider. Priority: Vault > HE_ACCOUNTS env var > DB.
 	//
 	// WHY three-tier priority:
@@ -313,9 +337,11 @@ func main() {
 	// Admin UI credentials are passed here and threaded into RegisterAdminRoutes.
 	// This is the SINGLE point where admin config enters the router — plans 03 and 04
 	// do not need to change main.go or the NewRouter signature. (UI-01, Checker issue 5 fix)
+	// Pass adminPasswordHash (bcrypt hash, not plaintext) — the router and admin UI
+	// use bcrypt.CompareHashAndPassword for all admin password checks.
 	handler := api.NewRouter(db, sm, launcher, []byte(cfg.JWTSecret), breakers,
 		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn, reg,
-		cfg.AdminUsername, cfg.AdminPassword, cfg.AdminSessionKey,
+		cfg.AdminUsername, adminPasswordHash, cfg.AdminSessionKey,
 		cfg.TokenRecoveryEnabled)
 
 	// Auto-generate a self-signed TLS certificate on first start when SSL_CERT/SSL_KEY paths

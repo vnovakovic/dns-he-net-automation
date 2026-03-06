@@ -17,6 +17,8 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const sessionCookieName = "admin_session"
@@ -79,26 +81,20 @@ func sessionRole(r *http.Request) string {
 //  2. Signed session cookie present → validate HMAC → inject context → pass through or redirect.
 //  3. Neither → redirect to /admin/login.
 //
-// Cookie format (new multi-user format):
+// Cookie format:
 //   hex(HMAC-SHA256(sessionCookieName + role + ":" + identifier)) + ":" + role + ":" + identifier
-//   Admin:   HMAC:admin:admin-username
-//   User:    HMAC:user:user-id
-//
-// WHY changing the cookie payload (compared to the old HMAC:username format):
-//   Adding role to the HMAC input means old single-role cookies (HMAC:username) produce a
-//   different signature than new cookies (HMAC:admin:username). This forces a re-login once
-//   on upgrade, which is the correct and safe behavior — old cookies should not be reusable
-//   after the format changes.
+//   Admin: HMAC:admin:admin-username    User: HMAC:user:user-id
 //
 // SameSite=Strict prevents CSRF on POST/DELETE mutations in the admin UI.
-// (RESEARCH.md Pitfall 5: SameSite=Lax is not sufficient for admin mutations)
 //
-// WHY /admin/login and /admin/static/* are excluded from auth:
-//   Login page must be accessible before a session exists (obvious), and static assets
-//   (CSS, JS) must load before the login page renders. Without these exclusions the
-//   browser would redirect CSS/JS requests to /admin/login, causing a redirect loop
-//   that prevents the login form from styling itself correctly.
-func AdminAuth(username, password string, signingKey []byte) func(http.Handler) http.Handler {
+// passwordHash is a bcrypt hash (never plaintext). bcrypt.CompareHashAndPassword is used for
+// Basic Auth checks — session cookie path only verifies the HMAC signature, not the password.
+//
+// WHY bcrypt for Basic Auth (not constant-time string compare):
+//   The admin password is stored as a bcrypt hash in the DB — plaintext is unavailable at
+//   runtime. bcrypt.CompareHashAndPassword recovers the embedded salt and re-hashes.
+//   Basic Auth is admin-only and not a hot path, so the ~100ms overhead is acceptable.
+func AdminAuth(username, passwordHash string, signingKey []byte) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Skip auth for the login page itself and static assets to avoid redirect loop.
@@ -110,7 +106,7 @@ func AdminAuth(username, password string, signingKey []byte) func(http.Handler) 
 			// 1. HTTP Basic Auth — checked first for scripted/curl access.
 			// Basic Auth is admin-only (env credentials). Account users must use session cookies.
 			if u, p, ok := r.BasicAuth(); ok {
-				if u == username && p == password {
+				if u == username && bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(p)) == nil {
 					// Inject admin context so handlers can distinguish admin from user sessions.
 					ctx := context.WithValue(r.Context(), ctxIsAdmin, true)
 					ctx = context.WithValue(ctx, ctxUserID, "")

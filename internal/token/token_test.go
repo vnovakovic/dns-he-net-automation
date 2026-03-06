@@ -53,7 +53,7 @@ func TestIssueToken_Success(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-1")
 
-	rawToken, jti, err := token.IssueToken(ctx, db, "acct-1", "admin", "my-label", 30, testSecret)
+	rawToken, jti, err := token.IssueToken(ctx, db, "acct-1", "admin", "my-label", 30, testSecret, nil)
 	require.NoError(t, err)
 
 	// Token format: {jti}.{jwt} — jti prefix makes the token self-identifying for revocation.
@@ -82,7 +82,7 @@ func TestIssueToken_InvalidRole(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-2")
 
-	_, _, err := token.IssueToken(ctx, db, "acct-2", "superadmin", "", 30, testSecret)
+	_, _, err := token.IssueToken(ctx, db, "acct-2", "superadmin", "", 30, testSecret, nil)
 	assert.Error(t, err, "IssueToken should return error for invalid role")
 	assert.Contains(t, err.Error(), "invalid role")
 }
@@ -94,7 +94,7 @@ func TestValidateToken_Valid(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-3")
 
-	rawToken, _, err := token.IssueToken(ctx, db, "acct-3", "viewer", "read-only", 30, testSecret)
+	rawToken, _, err := token.IssueToken(ctx, db, "acct-3", "viewer", "read-only", 30, testSecret, nil)
 	require.NoError(t, err)
 
 	claims, err := token.ValidateToken(ctx, db, rawToken, testSecret)
@@ -111,7 +111,7 @@ func TestValidateToken_Revoked(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-4")
 
-	rawToken, jti, err := token.IssueToken(ctx, db, "acct-4", "admin", "", 30, testSecret)
+	rawToken, jti, err := token.IssueToken(ctx, db, "acct-4", "admin", "", 30, testSecret, nil)
 	require.NoError(t, err)
 
 	err = token.RevokeToken(ctx, db, "acct-4", jti)
@@ -182,7 +182,7 @@ func TestRevokeToken_Success(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-7")
 
-	_, jti, err := token.IssueToken(ctx, db, "acct-7", "admin", "revoke-test", 30, testSecret)
+	_, jti, err := token.IssueToken(ctx, db, "acct-7", "admin", "revoke-test", 30, testSecret, nil)
 	require.NoError(t, err)
 
 	err = token.RevokeToken(ctx, db, "acct-7", jti)
@@ -241,10 +241,10 @@ func TestListTokens(t *testing.T) {
 	require.NoError(t, err)
 
 	// Issue the "newer" token via IssueToken — created_at defaults to CURRENT_TIMESTAMP.
-	_, newJTI, err := token.IssueToken(ctx, db, "acct-9", "viewer", "second-token", 60, testSecret)
+	_, newJTI, err := token.IssueToken(ctx, db, "acct-9", "viewer", "second-token", 60, testSecret, nil)
 	require.NoError(t, err)
 
-	records, err := token.ListTokens(ctx, db, "acct-9")
+	records, err := token.ListTokens(ctx, db, "acct-9", false)
 	require.NoError(t, err)
 	require.Len(t, records, 2, "should return 2 token records")
 
@@ -277,7 +277,7 @@ func TestListTokens_Empty(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-10")
 
-	records, err := token.ListTokens(ctx, db, "acct-10")
+	records, err := token.ListTokens(ctx, db, "acct-10", false)
 	require.NoError(t, err)
 	assert.NotNil(t, records, "ListTokens should return empty slice, not nil")
 	assert.Len(t, records, 0)

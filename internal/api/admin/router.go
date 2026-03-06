@@ -2,7 +2,6 @@ package admin
 
 import (
 	"context"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -179,16 +178,17 @@ func handleLoginPage() http.HandlerFunc {
 // On success: issues session cookie, redirects to /admin/accounts.
 // On failure: re-renders login form with error message (401 status).
 //
-// WHY two-stage auth (admin env check first, then DB users):
-//   1. Admin (env): stateless — no DB needed. Checked first so the admin can always log in
-//      even if the DB is corrupt or the users table is empty.
-//   2. Account Users (DB bcrypt): checked second. On match, issues a user session cookie
-//      scoped to that user's ID — downstream handlers filter accounts by this ID.
+// WHY two-stage auth (admin bcrypt first, then DB users):
+//   1. Admin (DB-stored bcrypt hash): checked first so the admin can always log in.
+//      The hash is resolved once at startup (store.EnsureAdminPassword) and passed here.
+//   2. Account Users (DB bcrypt): checked second — user-scoped session cookie issued on match.
 //
 // WHY 401 status on wrong credentials (not redirect):
 //   curl scripts checking status codes get the right signal. The browser still
 //   sees the re-rendered form because the response body contains HTML.
-func handleLoginPost(db *sql.DB, adminUsername, adminPassword string, signingKey []byte) http.HandlerFunc {
+//
+// adminPasswordHash is a bcrypt hash — never plaintext. See store.EnsureAdminPassword.
+func handleLoginPost(db *sql.DB, adminUsername, adminPasswordHash string, signingKey []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
@@ -197,8 +197,8 @@ func handleLoginPost(db *sql.DB, adminUsername, adminPassword string, signingKey
 		u := r.FormValue("username")
 		p := r.FormValue("password")
 
-		// 1. Admin check (env vars) — unchanged behavior.
-		if u == adminUsername && p == adminPassword {
+		// 1. Admin check — bcrypt compare against stored hash.
+		if u == adminUsername && bcrypt.CompareHashAndPassword([]byte(adminPasswordHash), []byte(p)) == nil {
 			IssueAdminSessionCookie(w, signingKey)
 			http.Redirect(w, r, "/admin/accounts", http.StatusFound)
 			return
@@ -619,11 +619,13 @@ func handleTokenRevoke(db *sql.DB) http.HandlerFunc {
 //   GET requests are logged, cached, and appear in browser history. The password must
 //   be in the request body, which rules out GET. POST keeps the password out of URLs.
 //
-// WHY adminPassword passed by value (not looked up from DB):
-//   The server admin password lives in the process environment (config), not the DB.
-//   Passing it here avoids an additional DB query on every reveal call. Account users
-//   are verified directly from the users table via authenticateAccountUser.
-func handleTokenReveal(db *sql.DB, jwtSecret []byte, adminPassword string, enabled bool) http.HandlerFunc {
+// WHY adminPasswordHash passed by value (not looked up from DB on each request):
+//   The hash is resolved once at startup (store.EnsureAdminPassword) and passed here.
+//   Avoiding a DB query per reveal call keeps the hot path lean. Account users are
+//   verified directly from the users table via authenticateAccountUser.
+//
+// adminPasswordHash is a bcrypt hash — bcrypt.CompareHashAndPassword is used for verification.
+func handleTokenReveal(db *sql.DB, jwtSecret []byte, adminPasswordHash string, enabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !enabled {
 			http.Error(w, "Token recovery is disabled on this server", http.StatusForbidden)
@@ -644,8 +646,11 @@ func handleTokenReveal(db *sql.DB, jwtSecret []byte, adminPassword string, enabl
 
 		// Verify portal password based on session type.
 		if isAdminSession(r) {
-			// Server admin: constant-time compare against config password.
-			if subtle.ConstantTimeCompare([]byte(password), []byte(adminPassword)) != 1 {
+			// Server admin: bcrypt compare against stored hash.
+			// WHY bcrypt (not constant-time string compare): the admin password is stored as
+			// a bcrypt hash — plaintext is unavailable. bcrypt.CompareHashAndPassword is
+			// constant-time with respect to the hash comparison step.
+			if bcrypt.CompareHashAndPassword([]byte(adminPasswordHash), []byte(password)) != nil {
 				http.Error(w, "Invalid password", http.StatusForbidden)
 				return
 			}
