@@ -67,6 +67,11 @@ templ AccountsPage(accounts []model.Account, zonesByAccount map[string][]model.Z
 				<label for="curl-token-input">API Token</label>
 				<input id="curl-token-input" type="text" placeholder="paste your bearer token here" spellcheck="false" autocomplete="off"/>
 			</div>
+			<div class="curl-tabs">
+				<button id="curl-tab-bash" class="curl-tab curl-tab-active" onclick="setCurlTab('bash')">bash</button>
+				<button id="curl-tab-cmd" class="curl-tab" onclick="setCurlTab('cmd')">cmd</button>
+				<button id="curl-tab-ps" class="curl-tab" onclick="setCurlTab('ps')">PowerShell</button>
+			</div>
 			<pre id="curl-dialog-cmd" class="curl-cmd"></pre>
 			<div class="curl-dialog-footer">
 				<button id="curl-copy-btn" class="btn btn-primary btn-sm" onclick="copyCurlCmd()">Copy</button>

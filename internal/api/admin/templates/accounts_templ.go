@@ -68,7 +68,7 @@ func AccountsPage(accounts []model.Account, zonesByAccount map[string][]model.Zo
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div class=\"card\" style=\"margin-top:1rem;\"><h3>Register Account</h3><p class=\"text-muted\">Account ID is an internal label (e.g. \"primary\"). Username and password are your dns.he.net login credentials.</p><div id=\"account-register-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/accounts\" hx-target=\"#accounts-cards\" hx-swap=\"beforeend\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"account_id\">Account ID</label> <input type=\"text\" id=\"account_id\" name=\"account_id\" placeholder=\"e.g. primary\" required></div><div class=\"form-group\"><label for=\"username\">HE Username</label> <input type=\"text\" id=\"username\" name=\"username\" placeholder=\"your@email.com\" required></div><div class=\"form-group\"><label for=\"password\">HE Password</label> <input type=\"password\" id=\"password\" name=\"password\" placeholder=\"dns.he.net password\" required></div><button type=\"submit\" class=\"btn btn-primary\">Register</button></div></form></div>      <dialog id=\"curl-dialog\" class=\"curl-dialog\"><div class=\"curl-dialog-header\"><span>curl template — <strong id=\"curl-dialog-label\"></strong></span> <button class=\"btn btn-sm curl-dialog-close\" onclick=\"document.getElementById('curl-dialog').close()\">✕</button></div><div class=\"curl-dialog-token\"><label for=\"curl-token-input\">API Token</label> <input id=\"curl-token-input\" type=\"text\" placeholder=\"paste your bearer token here\" spellcheck=\"false\" autocomplete=\"off\"></div><pre id=\"curl-dialog-cmd\" class=\"curl-cmd\"></pre><div class=\"curl-dialog-footer\"><button id=\"curl-copy-btn\" class=\"btn btn-primary btn-sm\" onclick=\"copyCurlCmd()\">Copy</button> <button class=\"btn btn-sm\" onclick=\"document.getElementById('curl-dialog').close()\">Close</button></div></dialog>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div class=\"card\" style=\"margin-top:1rem;\"><h3>Register Account</h3><p class=\"text-muted\">Account ID is an internal label (e.g. \"primary\"). Username and password are your dns.he.net login credentials.</p><div id=\"account-register-error\" style=\"margin-bottom:0.5rem;\"></div><form hx-post=\"/admin/accounts\" hx-target=\"#accounts-cards\" hx-swap=\"beforeend\" hx-on::after-request=\"this.reset()\"><div class=\"form-row\"><div class=\"form-group\"><label for=\"account_id\">Account ID</label> <input type=\"text\" id=\"account_id\" name=\"account_id\" placeholder=\"e.g. primary\" required></div><div class=\"form-group\"><label for=\"username\">HE Username</label> <input type=\"text\" id=\"username\" name=\"username\" placeholder=\"your@email.com\" required></div><div class=\"form-group\"><label for=\"password\">HE Password</label> <input type=\"password\" id=\"password\" name=\"password\" placeholder=\"dns.he.net password\" required></div><button type=\"submit\" class=\"btn btn-primary\">Register</button></div></form></div>      <dialog id=\"curl-dialog\" class=\"curl-dialog\"><div class=\"curl-dialog-header\"><span>curl template — <strong id=\"curl-dialog-label\"></strong></span> <button class=\"btn btn-sm curl-dialog-close\" onclick=\"document.getElementById('curl-dialog').close()\">✕</button></div><div class=\"curl-dialog-token\"><label for=\"curl-token-input\">API Token</label> <input id=\"curl-token-input\" type=\"text\" placeholder=\"paste your bearer token here\" spellcheck=\"false\" autocomplete=\"off\"></div><div class=\"curl-tabs\"><button id=\"curl-tab-bash\" class=\"curl-tab curl-tab-active\" onclick=\"setCurlTab('bash')\">bash</button> <button id=\"curl-tab-cmd\" class=\"curl-tab\" onclick=\"setCurlTab('cmd')\">cmd</button> <button id=\"curl-tab-ps\" class=\"curl-tab\" onclick=\"setCurlTab('ps')\">PowerShell</button></div><pre id=\"curl-dialog-cmd\" class=\"curl-cmd\"></pre><div class=\"curl-dialog-footer\"><button id=\"curl-copy-btn\" class=\"btn btn-primary btn-sm\" onclick=\"copyCurlCmd()\">Copy</button> <button class=\"btn btn-sm\" onclick=\"document.getElementById('curl-dialog').close()\">Close</button></div></dialog>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -126,7 +126,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(acc.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 97, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 102, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -139,7 +139,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(acc.Username)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 97, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 102, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
@@ -152,7 +152,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(acc.CreatedAt.Format("2006-01-02"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 98, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 103, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -165,7 +165,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/accounts/" + acc.ID + "/load-zones")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 103, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 108, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -178,7 +178,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs("#account-zones-" + sanitizeHTMLID(acc.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 104, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 109, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -191,7 +191,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs("#zones-spinner-" + sanitizeHTMLID(acc.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 106, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 111, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -204,7 +204,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs("zones-spinner-" + sanitizeHTMLID(acc.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 110, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 115, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -217,7 +217,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/accounts/" + acc.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 113, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 118, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -230,7 +230,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs("Remove account '" + acc.ID + "' and all its zones and tokens?")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 116, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 121, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -243,7 +243,7 @@ func AccountCard(acc model.Account, zones []model.Zone) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs("account-zones-" + sanitizeHTMLID(acc.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 128, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 133, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -312,7 +312,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(z.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 158, Col: 18}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 163, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 				if templ_7745c5c3_Err != nil {
@@ -330,7 +330,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(z.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 161, Col: 20}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 166, Col: 20}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 					if templ_7745c5c3_Err != nil {
@@ -358,7 +358,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var17 string
 					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(z.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 172, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 177, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 					if templ_7745c5c3_Err != nil {
@@ -371,7 +371,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var18 string
 					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(z.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 172, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 177, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 					if templ_7745c5c3_Err != nil {
@@ -384,7 +384,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var19 string
 					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(z.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 173, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 178, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 					if templ_7745c5c3_Err != nil {
@@ -397,7 +397,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var20 string
 					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(z.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 173, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 178, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 					if templ_7745c5c3_Err != nil {
@@ -410,7 +410,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var21 string
 					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(z.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 174, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 179, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 					if templ_7745c5c3_Err != nil {
@@ -423,7 +423,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var22 string
 					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(z.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 174, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 179, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 					if templ_7745c5c3_Err != nil {
@@ -436,7 +436,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var23 string
 					templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(z.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 175, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 180, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 					if templ_7745c5c3_Err != nil {
@@ -449,7 +449,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var24 string
 					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(z.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 175, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 180, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 					if templ_7745c5c3_Err != nil {
@@ -462,7 +462,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var25 string
 					templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(z.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 176, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 181, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 					if templ_7745c5c3_Err != nil {
@@ -475,7 +475,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(z.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 176, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 181, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 					if templ_7745c5c3_Err != nil {
@@ -498,7 +498,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/accounts/" + accountID + "/zones/" + z.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 185, Col: 71}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 190, Col: 71}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -511,7 +511,7 @@ func AccountZonesList(accountID string, zones []model.Zone) templ.Component {
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs("Remove zone '" + z.Name + "' from account '" + accountID + "'?")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 188, Col: 85}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 193, Col: 85}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {
@@ -607,7 +607,7 @@ func AccountRegisterError(msg string) templ.Component {
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(msg)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 218, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 223, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 		if templ_7745c5c3_Err != nil {
@@ -675,7 +675,7 @@ func AccountZonesSelectList(accountID string, zones []model.Zone) templ.Componen
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs("/admin/accounts/" + accountID + "/zones/store")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 243, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 248, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 			if templ_7745c5c3_Err != nil {
@@ -688,7 +688,7 @@ func AccountZonesSelectList(accountID string, zones []model.Zone) templ.Componen
 			var templ_7745c5c3_Var34 string
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs("#account-zones-" + sanitizeHTMLID(accountID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 244, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 249, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
@@ -706,7 +706,7 @@ func AccountZonesSelectList(accountID string, zones []model.Zone) templ.Componen
 				var templ_7745c5c3_Var35 string
 				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(z.Name + "|" + z.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 257, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 262, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 				if templ_7745c5c3_Err != nil {
@@ -719,7 +719,7 @@ func AccountZonesSelectList(accountID string, zones []model.Zone) templ.Componen
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(z.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 258, Col: 19}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 263, Col: 19}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 				if templ_7745c5c3_Err != nil {
@@ -737,7 +737,7 @@ func AccountZonesSelectList(accountID string, zones []model.Zone) templ.Componen
 					var templ_7745c5c3_Var37 string
 					templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(z.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 261, Col: 21}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/api/admin/templates/accounts.templ`, Line: 266, Col: 21}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 					if templ_7745c5c3_Err != nil {

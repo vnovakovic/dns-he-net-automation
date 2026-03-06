@@ -710,6 +710,35 @@ body.login-page {
   overflow-y: auto;
 }
 
+.curl-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 1rem;
+  background: var(--background);
+}
+
+.curl-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.82em;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.curl-tab:hover {
+  color: var(--foreground);
+}
+
+.curl-tab-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
 .curl-dialog-footer {
   display: flex;
   gap: 0.5rem;
