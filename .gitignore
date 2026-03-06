@@ -43,3 +43,7 @@ Thumbs.db
 # Test output
 /coverage.out
 /coverage.html
+
+# Build artifacts
+dnshenet-server.exe~
+screenshots.exe
