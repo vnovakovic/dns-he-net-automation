@@ -923,7 +923,7 @@ func AccountZonesSelectList(accountID string, zones []model.Zone) templ.Componen
 		}
 		ctx = templ.ClearChildren(ctx)
 		if len(zones) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<p class=\"text-muted\" style=\"margin:0;\">No zones found on dns.he.net.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<p class=\"text-muted\" style=\"margin:0;\">All zones from dns.he.net are already stored in the local database. Nothing new to add.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -899,8 +899,37 @@ func handleAccountLoadZones(db *sql.DB, sm *browser.SessionManager, breakers *re
 			return
 		}
 
+		// Filter out zones already stored in the DB so the operator only sees new zones.
+		//
+		// WHY filter here (not in the template or at the browser layer):
+		//   The template has no DB access. Filtering in the handler keeps the template logic
+		//   simple and makes it easy to test. Presenting already-stored zones in the checkbox
+		//   list is confusing: operators may re-select them thinking they need to be added again,
+		//   or they may worry about duplicate entries.
+		//
+		// WHY build a map (not a nested loop): O(n) lookup vs O(n*m) for large zone lists.
+		existingRows, dbErr := db.QueryContext(r.Context(),
+			`SELECT name FROM zones WHERE account_id = ?`, accountID)
+		existingNames := make(map[string]bool)
+		if dbErr == nil {
+			for existingRows.Next() {
+				var n string
+				if existingRows.Scan(&n) == nil {
+					existingNames[n] = true
+				}
+			}
+			_ = existingRows.Close()
+		}
+
+		var newZones []model.Zone
+		for _, z := range fetched {
+			if !existingNames[z.Name] {
+				newZones = append(newZones, z)
+			}
+		}
+
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = templates.AccountZonesSelectList(accountID, fetched).Render(r.Context(), w)
+		_ = templates.AccountZonesSelectList(accountID, newZones).Render(r.Context(), w)
 	}
 }
 

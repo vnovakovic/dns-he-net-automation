@@ -261,7 +261,7 @@ templ AccountRegisterError(msg string) {
 //   unaffected. After "Store selected" the div is replaced with AccountZonesList.
 templ AccountZonesSelectList(accountID string, zones []model.Zone) {
 	if len(zones) == 0 {
-		<p class="text-muted" style="margin:0;">No zones found on dns.he.net.</p>
+		<p class="text-muted" style="margin:0;">All zones from dns.he.net are already stored in the local database. Nothing new to add.</p>
 	} else {
 		<form
 			hx-post={ "/admin/accounts/" + accountID + "/zones/store" }
