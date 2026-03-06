@@ -189,8 +189,9 @@ curl -sk https://localhost:9001/healthz
 ```
   .\dnshenet-server.exe gen-cert --cert .\server.crt --key .\server.key
 ```
-
   Generates a self-signed ECDSA-P256 certificate with SANs for localhost and 127.0.0.1. Output: server.crt + server.key in the current directory.
+
+  
 ---
 
 ## 4. Configuration
