@@ -87,6 +87,12 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 		response.WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "HTTP method not allowed for this endpoint")
 	})
 
+	// Redirect root to the admin UI — no route is registered for "/" so without this
+	// the NotFound handler returns a JSON 404, which is confusing for browser users.
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin", http.StatusFound)
+	})
+
 	// Health check — no authentication required (OPS-01).
 	// vaultHealthFn returns "ok", "degraded: <reason>", or "disabled" (VAULT-04).
 	r.Get("/healthz", handlers.HealthHandler(db, launcher, vaultHealthFn))
