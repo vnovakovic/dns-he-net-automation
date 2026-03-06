@@ -17,11 +17,16 @@
 
 (function () {
   // recordName returns the canonical record name for the given type.
-  // TXT records live at the apex zone name; all others use a sample subdomain.
-  // WHY apex for TXT: SPF, DKIM, DMARC, and most TXT records are placed on the
-  //   zone root, not a subdomain. Showing 'subdomain.zone' for TXT would be misleading.
+  // TXT records live at the apex zone name; all others use a bracketed placeholder subdomain.
+  // WHY apex for TXT: SPF, DKIM, DMARC, and most TXT records are placed on the zone root.
+  // WHY {subdomain} in braces (not a literal word like "subdomain"):
+  //   A literal "subdomain.example.com" looks like a real hostname — the operator
+  //   might paste the example and forget to replace the prefix, accidentally targeting
+  //   "subdomain.example.com" which likely doesn't exist or is someone else's record.
+  //   Curly-brace syntax is universally recognised as "fill this in" and makes the
+  //   placeholder impossible to mistake for a real hostname that should be kept as-is.
   function recordName(type, zone) {
-    return type === 'TXT' ? zone : 'subdomain.' + zone;
+    return type === 'TXT' ? zone : '{subdomain}.' + zone;
   }
 
   // bodyForType returns the POST request body object for a given record type.
@@ -143,28 +148,32 @@
   // WHY by-name endpoint (not by-ID): the operator typically knows the record name
   //   but not the internal HE zone record ID. The by-name endpoint is more practical
   //   for automation scripts.
-  // WHY use zone (apex) as name: for TXT records this is the correct apex name;
-  //   for A/AAAA/CNAME the zone name is the nearest real value we can supply without
-  //   knowing the subdomain. The operator replaces only the name prefix if needed —
-  //   zone ID, type, and token are already real values requiring no edits.
+  // WHY use recordName() for DELETE name:
+  //   TXT → apex zone name (correct, no subdomain needed for SPF/DKIM etc.)
+  //   A/AAAA/CNAME → {subdomain}.zone — the curly-brace placeholder makes it
+  //   impossible to mistake for a real hostname, preventing accidental deletion
+  //   of the wrong record if the operator forgets to fill in the subdomain.
 
   function buildDeleteBash(base, zoneId, type, dynamic, zone, token) {
+    var name = recordName(type, zone);
     return (
-      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + zone + '&type=' + type + '" \\\n' +
+      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '" \\\n' +
       '  -H "Authorization: Bearer ' + token + '"'
     );
   }
 
   function buildDeleteCmd(base, zoneId, type, dynamic, zone, token) {
+    var name = recordName(type, zone);
     return (
-      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + zone + '&type=' + type + '"' +
+      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '"' +
       ' -H "Authorization: Bearer ' + token + '"'
     );
   }
 
   function buildDeletePs(base, zoneId, type, dynamic, zone, token) {
+    var name = recordName(type, zone);
     return (
-      'curl.exe -sk -X DELETE "' + base + '/api/v1/records?name=' + zone + '&type=' + type + '" `\n' +
+      'curl.exe -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '" `\n' +
       '  -H "Authorization: Bearer ' + token + '"'
     );
   }
