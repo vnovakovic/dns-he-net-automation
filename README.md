@@ -177,6 +177,20 @@ curl -sk https://localhost:9001/healthz
 # Open https://localhost:9001/admin/login  (default: admin / admin123)
 ```
 
+
+● The server binary has a built-in gen-cert subcommand (no openssl needed):
+
+  Linux:
+```
+  ./dnshenet-server-linux-amd64 gen-cert --cert ./server.crt --key ./server.key
+```
+
+  Windows:
+```
+  .\dnshenet-server.exe gen-cert --cert .\server.crt --key .\server.key
+```
+
+  Generates a self-signed ECDSA-P256 certificate with SANs for localhost and 127.0.0.1. Output: server.crt + server.key in the current directory.
 ---
 
 ## 4. Configuration
