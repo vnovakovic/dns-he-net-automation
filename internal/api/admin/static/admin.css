@@ -608,11 +608,43 @@ body.login-page {
      Template buttons are a third category — informational/utility, not destructive.
      A muted outline style makes them visually lighter than action buttons.
    ============================================================ */
-.tpl-btns {
+.tpl-section {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 3px;
 }
+
+/* WHY tpl-row-first has border-top: visually separates the section from the zone name cell
+   without adding a permanent separator; only the first row needs it as the top edge. */
+.tpl-row-first {
+  border-top: none;
+}
+
+.tpl-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+/* tpl-method-label: fixed-width badge showing the HTTP method for each button row.
+   WHY fixed width (3.2em): aligns POST/GET/DELETE labels so the buttons form
+   consistent columns across all three rows. */
+.tpl-method-label {
+  font-size: 0.68em;
+  font-weight: 700;
+  width: 3.2em;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+}
+
+.tpl-method-post   { background: #dbeafe; color: #1d4ed8; }
+.tpl-method-get    { background: #dcfce7; color: #15803d; }
+.tpl-method-delete { background: #fee2e2; color: #b91c1c; }
+
 
 .tpl-btn {
   font-size: 0.72em;

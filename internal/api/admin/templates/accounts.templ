@@ -173,12 +173,31 @@ templ AccountZonesList(accountID string, zones []model.Zone) {
 							//   The curl command URL requires the numeric HE zone ID.
 							//   Zones added without one cannot use the API until "Load zones from HE" populates it.
 							if z.ID != "" {
-								<div class="tpl-btns">
-									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" onclick="showCurlTemplate(this)" title="A record">A</button>
-									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-dynamic="true" onclick="showCurlTemplate(this)" title="A record with Dynamic DDNS">A+</button>
-									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="AAAA" onclick="showCurlTemplate(this)" title="AAAA record">AAAA</button>
-									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="CNAME" onclick="showCurlTemplate(this)" title="CNAME record">CNAME</button>
-									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="TXT" onclick="showCurlTemplate(this)" title="TXT record">TXT</button>
+								<div class="tpl-section">
+								<div class="tpl-row tpl-row-first">
+									<span class="tpl-method-label tpl-method-post">POST</span>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="POST" onclick="showCurlTemplate(this)" title="A record">A</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="POST" data-dynamic="true" onclick="showCurlTemplate(this)" title="A record with Dynamic DDNS">A+</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="AAAA" data-method="POST" onclick="showCurlTemplate(this)" title="AAAA record">AAAA</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="CNAME" data-method="POST" onclick="showCurlTemplate(this)" title="CNAME record">CNAME</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="TXT" data-method="POST" onclick="showCurlTemplate(this)" title="TXT record">TXT</button>
+								</div>
+								<div class="tpl-row">
+									<span class="tpl-method-label tpl-method-get">GET</span>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="GET" onclick="showCurlTemplate(this)" title="GET A records">A</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="GET" data-dynamic="true" onclick="showCurlTemplate(this)" title="GET A records (dynamic)">A+</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="AAAA" data-method="GET" onclick="showCurlTemplate(this)" title="GET AAAA records">AAAA</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="CNAME" data-method="GET" onclick="showCurlTemplate(this)" title="GET CNAME records">CNAME</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="TXT" data-method="GET" onclick="showCurlTemplate(this)" title="GET TXT records">TXT</button>
+								</div>
+								<div class="tpl-row">
+									<span class="tpl-method-label tpl-method-delete">DELETE</span>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="DELETE" onclick="showCurlTemplate(this)" title="DELETE A record">A</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="DELETE" data-dynamic="true" onclick="showCurlTemplate(this)" title="DELETE A record (dynamic)">A+</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="AAAA" data-method="DELETE" onclick="showCurlTemplate(this)" title="DELETE AAAA record">AAAA</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="CNAME" data-method="DELETE" onclick="showCurlTemplate(this)" title="DELETE CNAME record">CNAME</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="TXT" data-method="DELETE" onclick="showCurlTemplate(this)" title="DELETE TXT record">TXT</button>
+								</div>
 								</div>
 							} else {
 								<span class="text-muted text-sm">Load zones from HE to enable</span>

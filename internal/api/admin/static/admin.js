@@ -7,35 +7,45 @@
 //   referenced by a <script src> tag in layout.templ.
 //
 // HOW the dialog works:
-//   Each template button carries data-zone, data-zone-id, data-type, data-dynamic attrs.
-//   showCurlTemplate(btn) reads those attrs, builds the curl command, and opens the
-//   shared <dialog id="curl-dialog"> (rendered once in AccountsPage).
+//   Each template button carries data-zone, data-zone-id, data-type, data-dynamic,
+//   and data-method attrs. showCurlTemplate(btn) reads those attrs, builds the curl
+//   command for the active method (POST / GET / DELETE), and opens the shared
+//   <dialog id="curl-dialog"> (rendered once in AccountsPage).
 //   The token input inside the dialog persists between openings because <dialog> stays
 //   in the DOM — the user pastes their token once and all subsequent templates use it.
 //   Three tabs (bash | cmd | PowerShell) switch the displayed command variant.
 
 (function () {
-  // bodyForType returns the request body object for a given record type.
+  // recordName returns the canonical record name for the given type.
+  // TXT records live at the apex zone name; all others use a sample subdomain.
+  // WHY apex for TXT: SPF, DKIM, DMARC, and most TXT records are placed on the
+  //   zone root, not a subdomain. Showing 'subdomain.zone' for TXT would be misleading.
+  function recordName(type, zone) {
+    return type === 'TXT' ? zone : 'subdomain.' + zone;
+  }
+
+  // bodyForType returns the POST request body object for a given record type.
   function bodyForType(type, dynamic, zone) {
     var body;
     if (type === 'A') {
-      body = { type: 'A', name: 'subdomain.' + zone, content: '1.2.3.4', ttl: 300 };
+      body = { type: 'A', name: recordName(type, zone), content: '1.2.3.4', ttl: 300 };
       if (dynamic) {
         body.dynamic = true;
         body.ddns_key = 'optional-own-key';  // omit to auto-generate
       }
     } else if (type === 'AAAA') {
-      body = { type: 'AAAA', name: 'subdomain.' + zone, content: '2001:db8::1', ttl: 3600 };
+      body = { type: 'AAAA', name: recordName(type, zone), content: '2001:db8::1', ttl: 3600 };
     } else if (type === 'CNAME') {
-      body = { type: 'CNAME', name: 'subdomain.' + zone, content: 'target.example.com', ttl: 3600 };
+      body = { type: 'CNAME', name: recordName(type, zone), content: 'target.example.com', ttl: 3600 };
     } else if (type === 'TXT') {
-      // TXT records are typically set on the apex zone name, not a subdomain.
-      body = { type: 'TXT', name: zone, content: 'v=spf1 ~all', ttl: 300 };
+      body = { type: 'TXT', name: recordName(type, zone), content: 'v=spf1 ~all', ttl: 300 };
     }
     return body;
   }
 
-  // buildBash generates the bash/Linux curl command (multi-line, single-quoted JSON body).
+  // --- POST builders ---
+
+  // buildBash generates the bash/Linux curl POST command (multi-line, single-quoted JSON body).
   // WHY single-quoted JSON: no escaping needed inside single quotes in bash.
   function buildBash(base, zoneId, type, dynamic, zone, token) {
     var body = bodyForType(type, dynamic, zone);
@@ -54,12 +64,11 @@
     return cmd;
   }
 
-  // buildCmd generates the Windows CMD command (single line, inner quotes escaped as \").
+  // buildCmd generates the Windows CMD curl POST command (single line, inner quotes as \").
   // WHY single line: CMD line continuation (^) is fragile; one line is more paste-friendly.
   // WHY \" escaping: CMD requires \" to embed literal double quotes inside a double-quoted string.
   function buildCmd(base, zoneId, type, dynamic, zone, token) {
     var body = bodyForType(type, dynamic, zone);
-    // Escape inner double quotes for CMD: " → \"
     var bodyStr = JSON.stringify(body).replace(/"/g, '\\"');
     var cmd = (
       'curl -sk -X POST ' + base + '/api/v1/zones/' + zoneId + '/records' +
@@ -75,11 +84,10 @@
     return cmd;
   }
 
-  // buildPs generates the PowerShell command (multi-line with backtick, single-quoted JSON body).
-  // WHY curl.exe not curl: in PowerShell, `curl` is an alias for Invoke-WebRequest which has
-  //   different argument syntax. curl.exe invokes the real curl binary directly.
-  // WHY single-quoted JSON: PowerShell single quotes are literal — no escaping needed.
-  //   Double-quoted strings in PowerShell expand $variables, breaking JSON values like "1.2.3.4".
+  // buildPs generates the PowerShell curl POST command (multi-line with backtick).
+  // WHY curl.exe not curl: in PowerShell, `curl` is an alias for Invoke-WebRequest.
+  // WHY single-quoted JSON: PowerShell expands $variables in double-quoted strings,
+  //   breaking IP literals like "1.2.3.4" which contain no $ but could in other values.
   function buildPs(base, zoneId, type, dynamic, zone, token) {
     var body = bodyForType(type, dynamic, zone);
     var bodyStr = JSON.stringify(body);
@@ -97,23 +105,102 @@
     return cmd;
   }
 
-  // buildForShell dispatches to the correct builder based on the active shell tab.
-  function buildForShell(shell, base, zoneId, type, dynamic, zone) {
+  // --- GET builders ---
+  // GET /api/v1/zones/{zoneId}/records?type=TYPE&name=NAME
+  // Lists records in a zone filtered by type (and optionally name).
+  // WHY show name filter: makes the example more concrete and copy-paste ready;
+  //   the operator can delete &name=... to fetch all records of that type.
+
+  function buildGetBash(base, zoneId, type, dynamic, zone, token) {
+    var name = recordName(type, zone);
+    return (
+      'curl -sk -X GET "' + base + '/api/v1/zones/' + zoneId +
+      '/records?type=' + type + '&name=' + name + '" \\\n' +
+      '  -H "Authorization: Bearer ' + token + '"'
+    );
+  }
+
+  function buildGetCmd(base, zoneId, type, dynamic, zone, token) {
+    var name = recordName(type, zone);
+    return (
+      'curl -sk -X GET "' + base + '/api/v1/zones/' + zoneId +
+      '/records?type=' + type + '&name=' + name + '"' +
+      ' -H "Authorization: Bearer ' + token + '"'
+    );
+  }
+
+  function buildGetPs(base, zoneId, type, dynamic, zone, token) {
+    var name = recordName(type, zone);
+    return (
+      'curl.exe -sk -X GET "' + base + '/api/v1/zones/' + zoneId +
+      '/records?type=' + type + '&name=' + name + '" `\n' +
+      '  -H "Authorization: Bearer ' + token + '"'
+    );
+  }
+
+  // --- DELETE builders ---
+  // DELETE /api/v1/records?name=NAME&type=TYPE
+  // Deletes a record by name + type (the "delete by name" endpoint).
+  // WHY by-name endpoint (not by-ID): the operator typically knows the record name
+  //   but not the internal HE zone record ID. The by-name endpoint is more practical
+  //   for automation scripts.
+
+  function buildDeleteBash(base, zoneId, type, dynamic, zone, token) {
+    var name = recordName(type, zone);
+    return (
+      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '" \\\n' +
+      '  -H "Authorization: Bearer ' + token + '"'
+    );
+  }
+
+  function buildDeleteCmd(base, zoneId, type, dynamic, zone, token) {
+    var name = recordName(type, zone);
+    return (
+      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '"' +
+      ' -H "Authorization: Bearer ' + token + '"'
+    );
+  }
+
+  function buildDeletePs(base, zoneId, type, dynamic, zone, token) {
+    var name = recordName(type, zone);
+    return (
+      'curl.exe -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '" `\n' +
+      '  -H "Authorization: Bearer ' + token + '"'
+    );
+  }
+
+  // buildForShell dispatches to the correct builder based on the active shell tab and HTTP method.
+  // WHY method stored on dialog.dataset: showCurlTemplate sets it from button's data-method attr;
+  //   refreshCmd and setCurlTab can then rebuild without needing the originating button.
+  function buildForShell(shell, method, base, zoneId, type, dynamic, zone) {
     var token = (document.getElementById('curl-token-input').value || '').trim();
     if (!token) token = 'YOUR_API_TOKEN';
-    if (shell === 'cmd')  return buildCmd(base, zoneId, type, dynamic, zone, token);
-    if (shell === 'ps')   return buildPs(base, zoneId, type, dynamic, zone, token);
+
+    if (method === 'GET') {
+      if (shell === 'cmd') return buildGetCmd(base, zoneId, type, dynamic, zone, token);
+      if (shell === 'ps')  return buildGetPs(base, zoneId, type, dynamic, zone, token);
+      return buildGetBash(base, zoneId, type, dynamic, zone, token);
+    }
+    if (method === 'DELETE') {
+      if (shell === 'cmd') return buildDeleteCmd(base, zoneId, type, dynamic, zone, token);
+      if (shell === 'ps')  return buildDeletePs(base, zoneId, type, dynamic, zone, token);
+      return buildDeleteBash(base, zoneId, type, dynamic, zone, token);
+    }
+    // default: POST
+    if (shell === 'cmd') return buildCmd(base, zoneId, type, dynamic, zone, token);
+    if (shell === 'ps')  return buildPs(base, zoneId, type, dynamic, zone, token);
     return buildBash(base, zoneId, type, dynamic, zone, token);
   }
 
-  // refreshCmd re-renders the <pre> when the token input changes.
+  // refreshCmd re-renders the <pre> when the token input or tab changes.
   function refreshCmd() {
     var dialog = document.getElementById('curl-dialog');
     if (!dialog || !dialog.open) return;
     var pre = document.getElementById('curl-dialog-cmd');
     if (!pre) return;
     pre.textContent = buildForShell(
-      dialog.dataset.shell || 'bash',
+      dialog.dataset.shell  || 'bash',
+      dialog.dataset.method || 'POST',
       dialog.dataset.base,
       dialog.dataset.zoneId,
       dialog.dataset.type,
@@ -144,6 +231,7 @@
     var zoneId  = btn.dataset.zoneId;
     var type    = btn.dataset.type;
     var dynamic = btn.dataset.dynamic === 'true';
+    var method  = btn.dataset.method || 'POST';
     var base    = window.location.origin;
 
     var dialog = document.getElementById('curl-dialog');
@@ -153,9 +241,10 @@
     dialog.dataset.zoneId  = zoneId;
     dialog.dataset.type    = type;
     dialog.dataset.dynamic = dynamic;
+    dialog.dataset.method  = method;
     dialog.dataset.shell   = dialog.dataset.shell || 'bash'; // keep last-used tab
 
-    var label = type + (dynamic ? ' (dynamic DDNS)' : '') + ' \u2192 ' + zone;
+    var label = method + ' ' + type + (dynamic ? ' (dynamic DDNS)' : '') + ' \u2192 ' + zone;
     document.getElementById('curl-dialog-label').textContent = label;
 
     // Sync tab button state to match persisted shell.
@@ -165,7 +254,7 @@
     });
 
     document.getElementById('curl-dialog-cmd').textContent = buildForShell(
-      dialog.dataset.shell || 'bash', base, zoneId, type, dynamic, zone
+      dialog.dataset.shell || 'bash', method, base, zoneId, type, dynamic, zone
     );
 
     dialog.showModal();
@@ -175,7 +264,7 @@
   function showCopiedFeedback() {
     var btn = document.getElementById('curl-copy-btn');
     var orig = btn.textContent;
-    btn.textContent = '✓ Copied!';
+    btn.textContent = '\u2713 Copied!';
     btn.classList.add('btn-copied');
     setTimeout(function () {
       btn.textContent = orig;
