@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -56,6 +57,7 @@ func RegisterAdminRoutes(
 	breakers *resilience.BreakerRegistry,
 	jwtSecret []byte,
 	username, password, sessionKeyHex string,
+	tokenRecoveryEnabled bool,
 ) {
 	// Decode the hex session signing key. Fall back to a zero key if misconfigured —
 	// zero key means session cookies will not validate (every request redirects to login),
@@ -69,6 +71,18 @@ func RegisterAdminRoutes(
 		// Safe-fail: generate zero key — sessions will not persist across restarts,
 		// but the server will not crash. Operator should set ADMIN_SESSION_KEY properly.
 		signingKey = make([]byte, 32)
+	}
+
+	// Derive the AES-256 token recovery key when the feature is enabled.
+	// nil = feature off — handleTokenIssue passes nil to token.IssueToken, which stores NULL.
+	// WHY derive here (not in main): RegisterAdminRoutes already receives jwtSecret; keeping
+	//   the derivation close to usage avoids threading a separate key through NewRouter.
+	//   The same key is also derived in api/router.go for the REST API path — both must use
+	//   token.RecoveryKey(jwtSecret) with the same input to produce the same 32-byte key.
+	var recoveryKey *[32]byte
+	if tokenRecoveryEnabled {
+		k := token.RecoveryKey(jwtSecret)
+		recoveryKey = &k
 	}
 
 	r.Route("/admin", func(r chi.Router) {
@@ -120,9 +134,10 @@ func RegisterAdminRoutes(
 
 			// Token management pages (handlers replaced by plan 03).
 			r.Get("/tokens", handleTokensPage(db))
-			r.Get("/tokens/{accountID}", handleTokensForAccount(db))
-			r.Post("/tokens/{accountID}", handleTokenIssue(db, jwtSecret))
+			r.Get("/tokens/{accountID}", handleTokensForAccount(db, tokenRecoveryEnabled))
+			r.Post("/tokens/{accountID}", handleTokenIssue(db, jwtSecret, recoveryKey))
 			r.Delete("/tokens/{tokenID}", handleTokenRevoke(db))
+			r.Post("/tokens/{tokenID}/reveal", handleTokenReveal(db, jwtSecret, password, tokenRecoveryEnabled))
 
 			// Zones page: shows zones from DB with per-zone Export BIND / Import BIND actions.
 			// export and import routes use the numeric HE zone ID (not the zone name) so
@@ -505,10 +520,10 @@ func handleTokensPage(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func handleTokensForAccount(db *sql.DB) http.HandlerFunc {
+func handleTokensForAccount(db *sql.DB, recoveryEnabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accountID := chi.URLParam(r, "accountID")
-		tokens, err := token.ListTokens(r.Context(), db, accountID)
+		tokens, err := token.ListTokens(r.Context(), db, accountID, recoveryEnabled)
 		if err != nil {
 			http.Error(w, "Failed to list tokens", http.StatusInternalServerError)
 			return
@@ -528,7 +543,7 @@ func handleTokensForAccount(db *sql.DB) http.HandlerFunc {
 // WHY ListTokens + JTI match (not a direct GetToken by JTI):
 //   There is no GetToken(jti) helper. ListTokens returns all tokens ordered by created_at DESC.
 //   We search for the matching JTI in the returned slice — the newly issued token will be there.
-func handleTokenIssue(db *sql.DB, jwtSecret []byte) http.HandlerFunc {
+func handleTokenIssue(db *sql.DB, jwtSecret []byte, recoveryKey *[32]byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accountID := chi.URLParam(r, "accountID")
 		if err := r.ParseForm(); err != nil {
@@ -541,7 +556,7 @@ func handleTokenIssue(db *sql.DB, jwtSecret []byte) http.HandlerFunc {
 			role = "viewer"
 		}
 
-		rawJWT, jti, err := token.IssueToken(r.Context(), db, accountID, role, label, 0, jwtSecret)
+		rawJWT, jti, err := token.IssueToken(r.Context(), db, accountID, role, label, 0, jwtSecret, recoveryKey)
 		if err != nil {
 			http.Error(w, "Failed to issue token: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -549,7 +564,7 @@ func handleTokenIssue(db *sql.DB, jwtSecret []byte) http.HandlerFunc {
 
 		// Fetch the newly issued token record to populate the template.
 		// ListTokens returns newest first; we find the matching record by JTI.
-		tokens, err := token.ListTokens(r.Context(), db, accountID)
+		tokens, err := token.ListTokens(r.Context(), db, accountID, recoveryKey != nil)
 		if err != nil || len(tokens) == 0 {
 			http.Error(w, "Failed to fetch issued token", http.StatusInternalServerError)
 			return
@@ -586,6 +601,74 @@ func handleTokenRevoke(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+
+// handleTokenReveal decrypts and returns the stored raw token for a given JTI.
+// Called by POST /admin/tokens/{tokenID}/reveal with a "password" form field.
+//
+// Security flow:
+//  1. Check TOKEN_RECOVERY_ENABLED (tokenRecoveryEnabled) — return 403 if off.
+//     This hard-gates the feature regardless of what is stored in the DB.
+//  2. Verify the caller's portal password:
+//     — Admin session (server admin): compare against the admin password from config.
+//     — Account User session: bcrypt compare against the stored password hash.
+//     Either mismatch returns 403 with no information about why (timing-safe where possible).
+//  3. Call token.RevealToken to fetch and AES-256-GCM decrypt the stored token_value.
+//  4. Return the raw token string as plain text for the htmx reveal dialog to display.
+//
+// WHY POST not GET for reveal:
+//   GET requests are logged, cached, and appear in browser history. The password must
+//   be in the request body, which rules out GET. POST keeps the password out of URLs.
+//
+// WHY adminPassword passed by value (not looked up from DB):
+//   The server admin password lives in the process environment (config), not the DB.
+//   Passing it here avoids an additional DB query on every reveal call. Account users
+//   are verified directly from the users table via authenticateAccountUser.
+func handleTokenReveal(db *sql.DB, jwtSecret []byte, adminPassword string, enabled bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !enabled {
+			http.Error(w, "Token recovery is disabled on this server", http.StatusForbidden)
+			return
+		}
+
+		jti := chi.URLParam(r, "tokenID")
+
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		password := r.FormValue("password")
+		if password == "" {
+			http.Error(w, "Password is required", http.StatusBadRequest)
+			return
+		}
+
+		// Verify portal password based on session type.
+		if isAdminSession(r) {
+			// Server admin: constant-time compare against config password.
+			if subtle.ConstantTimeCompare([]byte(password), []byte(adminPassword)) != 1 {
+				http.Error(w, "Invalid password", http.StatusForbidden)
+				return
+			}
+		} else {
+			// Account user: bcrypt compare against stored hash.
+			userID := getSessionUserID(r)
+			if _, err := authenticateAccountUser(r.Context(), db, userID, password); err != nil {
+				http.Error(w, "Invalid password", http.StatusForbidden)
+				return
+			}
+		}
+
+		recovKey := token.RecoveryKey(jwtSecret)
+		rawToken, err := token.RevealToken(r.Context(), db, jti, recovKey)
+		if err != nil {
+			http.Error(w, "Token not available for recovery (issued before feature was enabled, or already revoked)", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(rawToken))
+	}
+}
 
 // handleZonesPage renders the zones view showing all zones from DB (GET /admin/zones).
 // Zones come from the DB (populated by "Load zones from HE" on the Accounts page).

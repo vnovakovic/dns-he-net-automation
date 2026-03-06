@@ -2,24 +2,110 @@
 // and listing for the dns-he-net-automation API authentication layer.
 //
 // Security properties:
-//   - Only the SHA-256 hash of the signed JWT is stored in the database (TOKEN-02, SEC-02).
-//   - Raw tokens are returned once at issuance and never persisted.
+//   - Only the SHA-256 hash of the signed JWT is stored in the database by default (TOKEN-02, SEC-02).
+//   - Raw tokens are returned once at issuance and never persisted UNLESS TOKEN_RECOVERY_ENABLED=true.
+//   - When recovery is enabled, the raw token is stored encrypted (AES-256-GCM) in token_value.
+//     See RecoveryKey() and encryptToken() for the key derivation and encryption details.
 //   - Algorithm confusion attacks are blocked via WithValidMethods(["HS256"]) (SEC-02).
 //   - Revocation is checked on every ValidateToken call via jti + token_hash lookup.
 package token
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
+
+// ─── Token recovery helpers ────────────────────────────────────────────────────
+
+// RecoveryKey derives the AES-256 encryption key used to encrypt/decrypt stored token values.
+//
+// WHY domain-separated from JWT_SECRET:
+//   JWT_SECRET is an HMAC-SHA256 signing key. Using it directly as an AES key would
+//   violate key-separation: compromising one domain (JWT signing) would also compromise
+//   the other (token storage). The prefix "dns-he-net-token-recovery-v1|" ensures the
+//   derived bytes are distinct even if the same raw secret is used for both purposes.
+//
+// WHY SHA-256 (not PBKDF2/scrypt):
+//   The input is already a high-entropy secret (JWT_SECRET must be ≥32 bytes). A
+//   password-hardening KDF is unnecessary when the source material is not a human password.
+//   SHA-256 gives us the required 32-byte AES-256 key deterministically and cheaply.
+//
+// DEPENDENCY: the same derivation is used at issuance (encryptToken) and at reveal
+//   (decryptToken). Changing this function — even just the prefix string — will make
+//   all previously stored token_value ciphertexts permanently unreadable.
+func RecoveryKey(jwtSecret []byte) [32]byte {
+	return sha256.Sum256(append([]byte("dns-he-net-token-recovery-v1|"), jwtSecret...))
+}
+
+// encryptToken encrypts rawToken with AES-256-GCM using the provided 32-byte key.
+// The output is base64-encoded "nonce || ciphertext" suitable for TEXT DB storage.
+//
+// WHY AES-256-GCM (not AES-CBC or ChaCha20):
+//   GCM provides authenticated encryption — tampering with the stored ciphertext is
+//   detected at decryption time (returns an error rather than silently producing garbage).
+//   This prevents an attacker with DB write access from substituting a ciphertext that
+//   decrypts to an arbitrary token.
+//
+// WHY random nonce per issuance (not a fixed nonce):
+//   A fixed nonce with the same key would allow an attacker who observes multiple
+//   ciphertexts to XOR them and recover the keystream (two-time pad attack). A fresh
+//   12-byte random nonce per encryption makes each ciphertext independently secure.
+func encryptToken(rawToken string, key [32]byte) (string, error) {
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return "", fmt.Errorf("new cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("new gcm: %w", err)
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("generate nonce: %w", err)
+	}
+	// Seal appends the ciphertext+tag to nonce, giving us [nonce|ciphertext|tag].
+	sealed := gcm.Seal(nonce, nonce, []byte(rawToken), nil)
+	return base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+// decryptToken is the inverse of encryptToken. Returns the plaintext raw token or an error
+// if the ciphertext is corrupt or was tampered with (GCM authentication failure).
+func decryptToken(encoded string, key [32]byte) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", fmt.Errorf("base64 decode: %w", err)
+	}
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return "", fmt.Errorf("new cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("new gcm: %w", err)
+	}
+	ns := gcm.NonceSize()
+	if len(data) < ns {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+	plaintext, err := gcm.Open(nil, data[:ns], data[ns:], nil)
+	if err != nil {
+		return "", fmt.Errorf("decrypt: %w", err)
+	}
+	return string(plaintext), nil
+}
 
 // Claims is the JWT payload for dns-he-net-automation bearer tokens.
 // Embeds jwt.RegisteredClaims which provides: ID (jti), ExpiresAt, IssuedAt.
@@ -32,14 +118,20 @@ type Claims struct {
 
 // TokenRecord is the safe public representation of a token returned by ListTokens.
 // It never exposes token_hash or the raw token value (TOKEN-06, SEC-02).
+//
+// Recoverable is true when token_value IS NOT NULL in the DB AND TOKEN_RECOVERY_ENABLED=true.
+// It is used by the admin UI to decide whether to show the "Show token" button on each row.
+// When false (either the flag is off, or the token was issued before the flag was turned on),
+// the reveal endpoint will return 403 even if called directly.
 type TokenRecord struct {
-	JTI       string     `json:"jti"`
-	AccountID string     `json:"account_id"`
-	Role      string     `json:"role"`
-	Label     *string    `json:"label,omitempty"`
-	CreatedAt time.Time  `json:"created_at"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	JTI         string     `json:"jti"`
+	AccountID   string     `json:"account_id"`
+	Role        string     `json:"role"`
+	Label       *string    `json:"label,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	Recoverable bool       `json:"-"` // true only when feature is on AND token_value stored
 }
 
 // hashToken computes the SHA-256 hash of rawToken and returns it as a hex string.
@@ -58,10 +150,14 @@ func hashToken(rawToken string) string {
 //   - label: optional human-readable label (may be empty string)
 //   - expiresInDays: number of days until expiry; 0 means no expiry (TOKEN-04)
 //   - secret: HMAC-SHA256 signing key (should be at least 32 bytes)
+//   - recoveryKey: when non-nil, the raw token is encrypted with AES-256-GCM and stored
+//     in token_value so it can be recovered later via RevealToken. When nil, token_value
+//     is left NULL and the token can never be retrieved after issuance (TOKEN-02, SEC-02).
+//     Pass nil unless TOKEN_RECOVERY_ENABLED=true. Use RecoveryKey(jwtSecret) to derive.
 //
-// The returned rawToken is shown to the user once. It is NOT stored in the database.
-// Only the SHA-256 hash of rawToken is stored (SEC-02).
-func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, expiresInDays int, secret []byte) (rawToken string, jti string, err error) {
+// The returned rawToken is shown to the user once. It is NOT stored in plaintext — only
+// the SHA-256 hash is always persisted; the encrypted form is stored only when recoveryKey != nil.
+func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, expiresInDays int, secret []byte, recoveryKey *[32]byte) (rawToken string, jti string, err error) {
 	// Validate role against the allowed set (TOKEN-03).
 	if role != "admin" && role != "viewer" {
 		return "", "", fmt.Errorf("invalid role %q: must be \"admin\" or \"viewer\"", role)
@@ -132,10 +228,24 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 		expiresAtVal = expiresAt
 	}
 
-	// Store the hash (never the raw token) in the tokens table.
+	// Encrypt and store the raw token when the recovery feature is enabled.
+	// When recoveryKey is nil, tokenValueVal stays nil → token_value column is NULL.
+	// The token cannot be retrieved after this point when nil (TOKEN-02, SEC-02).
+	var tokenValueVal interface{}
+	if recoveryKey != nil {
+		encrypted, encErr := encryptToken(rawToken, *recoveryKey)
+		if encErr != nil {
+			return "", "", fmt.Errorf("encrypt token for recovery: %w", encErr)
+		}
+		tokenValueVal = encrypted
+	}
+
+	// Store the hash and optionally the encrypted token in the tokens table.
+	// token_hash is always stored (revocation check hot path).
+	// token_value is stored only when recovery is enabled (see recoveryKey above).
 	_, err = db.ExecContext(ctx,
-		`INSERT INTO tokens (jti, account_id, role, label, token_hash, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		jti, accountID, role, labelVal, tokenHash, expiresAtVal,
+		`INSERT INTO tokens (jti, account_id, role, label, token_hash, expires_at, token_value) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		jti, accountID, role, labelVal, tokenHash, expiresAtVal, tokenValueVal,
 	)
 	if err != nil {
 		return "", "", fmt.Errorf("store token: %w", err)
@@ -273,9 +383,16 @@ func RevokeByJTI(ctx context.Context, db *sql.DB, jti string) error {
 // ListTokens returns all token records for the given accountID, ordered by created_at DESC.
 // The response never includes token_hash or raw token values (TOKEN-06, SEC-02).
 // Returns an empty slice (not an error) when no tokens exist for the account.
-func ListTokens(ctx context.Context, db *sql.DB, accountID string) ([]TokenRecord, error) {
+//
+// recoveryEnabled must be true (matching TOKEN_RECOVERY_ENABLED config) for the Recoverable
+// field to be populated. When false, Recoverable is always false regardless of DB state,
+// ensuring the "Show" button never appears when the feature is disabled at the config level.
+// This means toggling TOKEN_RECOVERY_ENABLED=false immediately hides the Show button without
+// any DB changes — existing token_value rows are preserved but inaccessible.
+func ListTokens(ctx context.Context, db *sql.DB, accountID string, recoveryEnabled bool) ([]TokenRecord, error) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT jti, account_id, role, label, created_at, expires_at, revoked_at
+		`SELECT jti, account_id, role, label, created_at, expires_at, revoked_at,
+		        (token_value IS NOT NULL) AS has_stored_token
 		 FROM tokens
 		 WHERE account_id = ?
 		 ORDER BY created_at DESC`,
@@ -292,6 +409,7 @@ func ListTokens(ctx context.Context, db *sql.DB, accountID string) ([]TokenRecor
 		var label sql.NullString
 		var expiresAt sql.NullTime
 		var revokedAt sql.NullTime
+		var hasStoredToken bool
 
 		if err := rows.Scan(
 			&rec.JTI,
@@ -301,6 +419,7 @@ func ListTokens(ctx context.Context, db *sql.DB, accountID string) ([]TokenRecor
 			&rec.CreatedAt,
 			&expiresAt,
 			&revokedAt,
+			&hasStoredToken,
 		); err != nil {
 			return nil, fmt.Errorf("scan token row: %w", err)
 		}
@@ -314,6 +433,9 @@ func ListTokens(ctx context.Context, db *sql.DB, accountID string) ([]TokenRecor
 		if revokedAt.Valid {
 			rec.RevokedAt = &revokedAt.Time
 		}
+		// Recoverable is only true when the feature flag is on AND a ciphertext exists.
+		// If the flag is off, we never expose the Show button even if ciphertexts are present.
+		rec.Recoverable = recoveryEnabled && hasStoredToken
 
 		records = append(records, rec)
 	}
@@ -326,4 +448,41 @@ func ListTokens(ctx context.Context, db *sql.DB, accountID string) ([]TokenRecor
 	}
 
 	return records, nil
+}
+
+// RevealToken fetches and decrypts the stored token value for the given JTI.
+// Returns the raw token string, or an error if not found, already revoked, or decryption fails.
+//
+// This function is only called by the /admin/tokens/{jti}/reveal endpoint, which first
+// verifies the caller's portal password before invoking this function.
+// Never call this function without prior password verification.
+//
+// Returns sql.ErrNoRows if the JTI does not exist or token_value is NULL (token was issued
+// before recovery was enabled, or the feature was off at issuance time).
+func RevealToken(ctx context.Context, db *sql.DB, jti string, key [32]byte) (string, error) {
+	var tokenValue sql.NullString
+	var revokedAt sql.NullTime
+
+	err := db.QueryRowContext(ctx,
+		`SELECT token_value, revoked_at FROM tokens WHERE jti = ?`,
+		jti,
+	).Scan(&tokenValue, &revokedAt)
+	if err == sql.ErrNoRows {
+		return "", sql.ErrNoRows
+	}
+	if err != nil {
+		return "", fmt.Errorf("fetch token: %w", err)
+	}
+	if revokedAt.Valid {
+		return "", fmt.Errorf("token is revoked")
+	}
+	if !tokenValue.Valid {
+		// Token was issued before recovery was enabled or feature was off at issuance time.
+		return "", sql.ErrNoRows
+	}
+	raw, err := decryptToken(tokenValue.String, key)
+	if err != nil {
+		return "", fmt.Errorf("decrypt token: %w", err)
+	}
+	return raw, nil
 }

@@ -315,7 +315,8 @@ func main() {
 	// do not need to change main.go or the NewRouter signature. (UI-01, Checker issue 5 fix)
 	handler := api.NewRouter(db, sm, launcher, []byte(cfg.JWTSecret), breakers,
 		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn, reg,
-		cfg.AdminUsername, cfg.AdminPassword, cfg.AdminSessionKey)
+		cfg.AdminUsername, cfg.AdminPassword, cfg.AdminSessionKey,
+		cfg.TokenRecoveryEnabled)
 
 	// Auto-generate a self-signed TLS certificate on first start when SSL_CERT/SSL_KEY paths
 	// are configured but the files do not yet exist.
@@ -511,7 +512,7 @@ func runTokenCreate() {
 		os.Exit(1)
 	}
 
-	rawToken, jti, err := token.IssueToken(context.Background(), db, *accountID, *role, *label, *expiresInDays, []byte(cfg.JWTSecret))
+	rawToken, jti, err := token.IssueToken(context.Background(), db, *accountID, *role, *label, *expiresInDays, []byte(cfg.JWTSecret), nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: issue token: %v\n", err)
 		os.Exit(1)

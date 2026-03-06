@@ -317,3 +317,114 @@
     }
   });
 })();
+
+// ─── Token reveal dialog ──────────────────────────────────────────────────────
+// showRevealDialog, submitReveal, and copyRevealToken implement the "Show token"
+// flow on the Tokens page. They are only reachable when TOKEN_RECOVERY_ENABLED=true
+// (the Show button is not rendered otherwise — see TokenRow in tokens.templ).
+//
+// HOW IT WORKS:
+//   1. Operator clicks "Show" on a token row → showRevealDialog(jti) opens the dialog.
+//   2. Operator enters their portal password and clicks "Reveal token".
+//   3. submitReveal() POSTs to /admin/tokens/{jti}/reveal with the password.
+//   4. Server verifies the password and returns the decrypted raw token as plain text.
+//   5. The token is displayed in a <pre> element inside the dialog.
+//   6. Operator copies it with the Copy button, then closes the dialog.
+//
+// WHY fetch() not htmx for the reveal POST:
+//   The password must be read from the input, the JTI is stored on the dialog (not an
+//   htmx attribute on the button), and the response needs to update multiple elements
+//   (hide the error, show the token, show the Copy button). fetch() gives precise control
+//   over all three without a complex htmx hx-vals + OOB swap setup.
+
+(function () {
+  window.showRevealDialog = function (jti) {
+    var dialog = document.getElementById('reveal-dialog');
+    dialog.dataset.jti = jti;
+
+    // Reset state from previous open.
+    document.getElementById('reveal-password').value = '';
+    document.getElementById('reveal-error').style.display = 'none';
+    document.getElementById('reveal-error').textContent = '';
+    document.getElementById('reveal-token-value').style.display = 'none';
+    document.getElementById('reveal-token-value').textContent = '';
+    document.getElementById('reveal-copy-btn').style.display = 'none';
+
+    document.getElementById('reveal-dialog-label').textContent = jti.slice(0, 8) + '...';
+    dialog.showModal();
+    // Auto-focus password field for keyboard UX.
+    setTimeout(function () { document.getElementById('reveal-password').focus(); }, 50);
+  };
+
+  window.submitReveal = function () {
+    var dialog = document.getElementById('reveal-dialog');
+    var jti = dialog.dataset.jti;
+    var password = document.getElementById('reveal-password').value;
+    var errEl = document.getElementById('reveal-error');
+    var preEl = document.getElementById('reveal-token-value');
+    var copyBtn = document.getElementById('reveal-copy-btn');
+
+    errEl.style.display = 'none';
+    errEl.textContent = '';
+
+    var body = new URLSearchParams();
+    body.append('password', password);
+
+    fetch('/admin/tokens/' + jti + '/reveal', { method: 'POST', body: body })
+      .then(function (resp) {
+        if (!resp.ok) {
+          return resp.text().then(function (msg) {
+            errEl.textContent = msg || 'Failed to reveal token.';
+            errEl.style.display = 'inline';
+          });
+        }
+        return resp.text().then(function (rawToken) {
+          preEl.textContent = rawToken;
+          preEl.style.display = 'block';
+          copyBtn.style.display = 'inline-block';
+        });
+      })
+      .catch(function () {
+        errEl.textContent = 'Network error — could not reach the server.';
+        errEl.style.display = 'inline';
+      });
+  };
+
+  window.copyRevealToken = function () {
+    var text = document.getElementById('reveal-token-value').textContent;
+    var btn = document.getElementById('reveal-copy-btn');
+    var orig = btn.textContent;
+    var done = function () {
+      btn.textContent = '\u2713 Copied!';
+      btn.classList.add('btn-copied');
+      setTimeout(function () { btn.textContent = orig; btn.classList.remove('btn-copied'); }, 2000);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        fallbackCopyText(text, done);
+      });
+    } else {
+      fallbackCopyText(text, done);
+    }
+  };
+
+  function fallbackCopyText(text, cb) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand('copy'); cb(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  // Submit on Enter key in the password field.
+  document.addEventListener('DOMContentLoaded', function () {
+    var pwInput = document.getElementById('reveal-password');
+    if (pwInput) {
+      pwInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); window.submitReveal(); }
+      });
+    }
+  });
+})();

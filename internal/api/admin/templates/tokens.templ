@@ -35,6 +35,29 @@ templ TokensPage(accounts []model.Account, data PageData) {
 				</div>
 			</div>
 		}
+		// Reveal dialog — shared across all token rows, populated by showRevealDialog() in admin.js.
+		// WHY <dialog>: native modal with ESC support, no JS framework needed (same pattern as curl-dialog).
+		// DEPENDENCY: TOKEN_RECOVERY_ENABLED must be true for the Show button to appear (see TokenRow).
+		//   When the feature is disabled, this dialog is still rendered but is never opened.
+		<dialog id="reveal-dialog" class="curl-dialog">
+			<div class="curl-dialog-header">
+				<span>Reveal token — <strong id="reveal-dialog-label"></strong></span>
+				<button class="btn btn-sm curl-dialog-close" onclick="document.getElementById('reveal-dialog').close()">&#x2715;</button>
+			</div>
+			<div class="curl-dialog-token">
+				<label for="reveal-password">Portal password</label>
+				<input id="reveal-password" type="password" placeholder="your admin / account password" autocomplete="current-password"/>
+			</div>
+			<div style="padding:0 1rem 0.75rem;">
+				<button class="btn btn-primary btn-sm" onclick="submitReveal()">Reveal token</button>
+				<span id="reveal-error" class="error-banner" style="margin-left:0.5rem;display:none;"></span>
+			</div>
+			<pre id="reveal-token-value" class="curl-cmd" style="display:none;"></pre>
+			<div class="curl-dialog-footer">
+				<button id="reveal-copy-btn" class="btn btn-primary btn-sm" style="display:none;" onclick="copyRevealToken()">Copy</button>
+				<button class="btn btn-sm" onclick="document.getElementById('reveal-dialog').close()">Close</button>
+			</div>
+		</dialog>
 	}
 }
 
@@ -86,7 +109,7 @@ templ TokenRow(tok token.TokenRecord) {
 				<span class="badge badge-success">active</span>
 			}
 		</td>
-		<td>
+		<td style="display:flex;gap:0.35rem;flex-wrap:wrap;">
 			if tok.RevokedAt == nil {
 				<button
 					class="btn btn-danger btn-sm"
@@ -95,6 +118,17 @@ templ TokenRow(tok token.TokenRecord) {
 					hx-swap="outerHTML swap:500ms"
 					hx-confirm="Revoke this token? It will be immediately rejected on the next request.">
 					Revoke
+				</button>
+			}
+			if tok.Recoverable && tok.RevokedAt == nil {
+				// WHY Recoverable check: Show button only appears when TOKEN_RECOVERY_ENABLED=true
+				//   AND the token has an encrypted value in the DB (it was issued while the feature
+				//   was on). Tokens issued before the feature was enabled show no button.
+				<button
+					class="btn btn-sm"
+					data-jti={ tok.JTI }
+					onclick="showRevealDialog(this.dataset.jti)">
+					Show
 				</button>
 			}
 		</td>

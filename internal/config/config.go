@@ -117,6 +117,36 @@ type Config struct {
 	SSLCert string `env:"SSL_CERT"` // path to PEM-encoded certificate (or chain)
 	SSLKey  string `env:"SSL_KEY"`  // path to PEM-encoded private key
 
+	// TokenRecoveryEnabled controls whether raw token strings are stored (encrypted) in the
+	// database so that account owners can retrieve a forgotten token via the admin UI by
+	// confirming their portal password.
+	//
+	// ┌─────────────────────────────────────────────────────────────────────────────────┐
+	// │  HOW TO ENABLE / DISABLE THIS FEATURE                                          │
+	// │                                                                                 │
+	// │  Set the environment variable:  TOKEN_RECOVERY_ENABLED=true   (enables)        │
+	// │                                 TOKEN_RECOVERY_ENABLED=false  (disables, default)│
+	// │                                                                                 │
+	// │  When DISABLED (default):                                                       │
+	// │    • token_value column stays NULL for all new tokens                           │
+	// │    • /admin/tokens/{jti}/reveal always returns 403 Forbidden                   │
+	// │    • Existing stored ciphertexts are NOT deleted — they remain in the DB but    │
+	// │      are inaccessible until the flag is re-enabled.                             │
+	// │                                                                                 │
+	// │  When ENABLED:                                                                  │
+	// │    • Each newly issued token is encrypted with AES-256-GCM and stored in        │
+	// │      token_value. Key = SHA-256("dns-he-net-token-recovery-v1|" + JWT_SECRET). │
+	// │    • Tokens issued BEFORE the flag was turned on are NOT retroactively stored.  │
+	// │    • The reveal endpoint verifies the caller's portal password before returning  │
+	// │      the decrypted token string.                                                 │
+	// │                                                                                 │
+	// │  SECURITY NOTE:                                                                 │
+	// │    Storing encrypted tokens increases the blast radius of a DB + secret leak.   │
+	// │    Enable only in deployments where recovery is more important than this risk.   │
+	// │    The default is false for this reason.                                         │
+	// └─────────────────────────────────────────────────────────────────────────────────┘
+	TokenRecoveryEnabled bool `env:"TOKEN_RECOVERY_ENABLED" envDefault:"false"`
+
 	// Admin UI authentication (UI-04).
 	// Both AdminUsername and AdminPassword are required when the admin UI is accessed.
 	// ADMIN_SESSION_KEY is separate from JWT_SECRET — rotating the JWT secret must not

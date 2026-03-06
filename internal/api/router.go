@@ -18,6 +18,7 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/browser"
 	"github.com/vnovakov/dns-he-net-automation/internal/metrics"
 	"github.com/vnovakov/dns-he-net-automation/internal/resilience"
+	"github.com/vnovakov/dns-he-net-automation/internal/token"
 )
 
 // NewRouter builds and returns the chi HTTP router with all middleware and route registrations.
@@ -43,8 +44,19 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 	globalRPM, perTokenRPM int,
 	vaultHealthFn func() string,
 	reg *metrics.Registry,
-	adminUsername, adminPassword, adminSessionKey string) http.Handler {
+	adminUsername, adminPassword, adminSessionKey string,
+	tokenRecoveryEnabled bool) http.Handler {
 	r := chi.NewRouter()
+
+	// Derive the AES-256 recovery key from the JWT secret when recovery is enabled.
+	// nil means "feature off" — IssueToken and ListTokens both accept nil safely.
+	// WHY derive here (not in config): the key is computed once per router init and
+	// threaded into handlers as a [32]byte pointer — no repeated derivation per request.
+	var recoveryKey *[32]byte
+	if tokenRecoveryEnabled {
+		k := token.RecoveryKey(secret)
+		recoveryKey = &k
+	}
 
 	// Global rate limit — registered first, before auth, for DDoS protection (RES-03).
 	// Limits total requests per minute across all clients (research Pitfall 4).
@@ -118,8 +130,8 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 				r.With(middleware.RequireAdmin).Delete("/", handlers.DeleteAccount(db, sm))
 
 				r.Route("/tokens", func(r chi.Router) {
-					r.Get("/", handlers.ListTokens(db))
-					r.With(middleware.RequireAdmin).Post("/", handlers.IssueToken(db, secret))
+					r.Get("/", handlers.ListTokens(db, tokenRecoveryEnabled))
+					r.With(middleware.RequireAdmin).Post("/", handlers.IssueToken(db, secret, recoveryKey))
 					r.With(middleware.RequireAdmin).Delete("/{tokenID}", handlers.RevokeToken(db))
 				})
 			})
@@ -161,7 +173,7 @@ func NewRouter(db *sql.DB, sm *browser.SessionManager, launcher *browser.Launche
 	// Auth (Basic Auth + HMAC-SHA256 session cookie) is handled inside RegisterAdminRoutes
 	// via the AdminAuth middleware. The full dependency set is passed here; stub handlers
 	// ignore unused params until plan 03/04 fills them in.
-	admin.RegisterAdminRoutes(r, db, sm, breakers, secret, adminUsername, adminPassword, adminSessionKey)
+	admin.RegisterAdminRoutes(r, db, sm, breakers, secret, adminUsername, adminPassword, adminSessionKey, tokenRecoveryEnabled)
 
 	return r
 }

@@ -32,8 +32,10 @@ type issueTokenResponse struct {
 // IssueToken handles POST /api/v1/accounts/{accountID}/tokens.
 // Requires admin role (enforced by RequireAdmin middleware in router).
 // Enforces account isolation (ACCT-04).
-// Returns 201 with raw JWT once — it is never stored and cannot be retrieved again.
-func IssueToken(db *sql.DB, secret []byte) http.HandlerFunc {
+// Returns 201 with raw JWT once — it is never stored and cannot be retrieved again
+// unless TOKEN_RECOVERY_ENABLED=true, in which case recoveryKey must be non-nil and
+// the encrypted token is stored in token_value (see token.IssueToken for details).
+func IssueToken(db *sql.DB, secret []byte, recoveryKey *[32]byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accountID := chi.URLParam(r, "accountID")
 
@@ -72,14 +74,15 @@ func IssueToken(db *sql.DB, secret []byte) http.HandlerFunc {
 			return
 		}
 
-		rawToken, jti, err := token.IssueToken(r.Context(), db, accountID, req.Role, req.Label, req.ExpiresInDays, secret)
+		rawToken, jti, err := token.IssueToken(r.Context(), db, accountID, req.Role, req.Label, req.ExpiresInDays, secret, recoveryKey)
 		if err != nil {
 			response.WriteError(w, http.StatusInternalServerError, "issue_error", "Failed to issue token")
 			return
 		}
 
 		// Fetch the issued token record to get expires_at for the response.
-		tokens, err := token.ListTokens(r.Context(), db, accountID)
+		// recoveryEnabled=false: Recoverable field is unused in the API JSON response (json:"-").
+		tokens, err := token.ListTokens(r.Context(), db, accountID, false)
 		if err != nil {
 			response.WriteError(w, http.StatusInternalServerError, "db_error", "Failed to retrieve issued token")
 			return
@@ -112,7 +115,9 @@ func IssueToken(db *sql.DB, secret []byte) http.HandlerFunc {
 // Any authenticated token (admin or viewer) can list tokens for their account.
 // Enforces account isolation (ACCT-04).
 // SECURITY (TOKEN-06): Response never includes token_hash or raw token values.
-func ListTokens(db *sql.DB) http.HandlerFunc {
+// recoveryEnabled is passed through to token.ListTokens but Recoverable is json:"-"
+// so it never appears in the API JSON response — safe to call with either value.
+func ListTokens(db *sql.DB, recoveryEnabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accountID := chi.URLParam(r, "accountID")
 
@@ -124,7 +129,7 @@ func ListTokens(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		tokens, err := token.ListTokens(r.Context(), db, accountID)
+		tokens, err := token.ListTokens(r.Context(), db, accountID, recoveryEnabled)
 		if err != nil {
 			response.WriteError(w, http.StatusInternalServerError, "db_error", "Failed to list tokens")
 			return

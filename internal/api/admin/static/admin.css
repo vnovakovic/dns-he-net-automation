@@ -633,18 +633,35 @@ body.login-page {
 .tpl-method-label {
   font-size: 0.68em;
   font-weight: 700;
-  width: 3.2em;
+  /* WHY min-width not width: "DELETE" is wider than "GET"/"POST"; a fixed width clips it.
+     min-width ensures the label never shrinks below the widest text while still allowing
+     it to expand, which is what caused DELETE to overflow onto the A button. */
+  min-width: 3.8em;
   text-align: center;
-  padding: 2px 4px;
+  padding: 2px 5px;
   border-radius: 3px;
   flex-shrink: 0;
   letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 .tpl-method-post   { background: #dbeafe; color: #1d4ed8; }
 .tpl-method-get    { background: #dcfce7; color: #15803d; }
 .tpl-method-delete { background: #fee2e2; color: #b91c1c; }
 
+/* WHY tpl-row gap increased: the method label needs a clear visual separation from
+   the first type button so even the widest label (DELETE) never runs into it. */
+.tpl-row {
+  gap: 4px;
+}
+
+/* tpl-btn-post/get/delete: colour-match type buttons to their row's HTTP method.
+   WHY coloured text instead of filled background: filled backgrounds make 5 buttons
+   per row visually heavy. Text colour keeps the button lightweight while still
+   conveying the method at a glance. Hover still uses primary blue for consistency. */
+.tpl-row:has(.tpl-method-post)   .tpl-btn { color: #1d4ed8; border-color: #bfdbfe; }
+.tpl-row:has(.tpl-method-get)    .tpl-btn { color: #15803d; border-color: #bbf7d0; }
+.tpl-row:has(.tpl-method-delete) .tpl-btn { color: #b91c1c; border-color: #fecaca; }
 
 .tpl-btn {
   font-size: 0.72em;
