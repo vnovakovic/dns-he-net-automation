@@ -952,16 +952,26 @@ func handleAccountLoadZones(db *sql.DB, sm *browser.SessionManager, breakers *re
 		}
 
 		// Filter out zones that should not be offered for selection:
-		//  1. Zones already stored in the DB under ANY account (global uniqueness).
+		//  1. Zones already stored in the DB under any account belonging to the current user.
 		//  2. Zones with no name (empty string) — scraping artifacts, not valid zones.
 		//
-		// WHY filter globally (not just for current account):
-		//   A zone like eyodwa.org can only be controlled by ONE account in this system.
-		//   If it is already registered under a different account, showing it again in the
-		//   selection list would allow a second account to claim the same zone, creating
-		//   two DB rows with the same he_zone_id. Both tokens would then have authority over
-		//   the same real zone on dns.he.net — a security gap where two independent users
-		//   can modify each other's records without knowing about each other.
+		// WHY filter per-user (not globally):
+		//   Each DNS Portal user manages their own independent set of HE accounts and zones.
+		//   Filtering globally would prevent user02 from loading a zone that user01 already
+		//   loaded — but user02's accounts are completely independent. The correct isolation
+		//   boundary is the user: a zone should not appear twice across the same user's
+		//   accounts, but different users may independently manage the same HE zone.
+		//
+		// WHY still filter across all of the user's accounts (not just the current one):
+		//   If user01 loaded example.com into account01, it should not reappear in account02's
+		//   load list — both accounts belong to user01, so the zone would be managed twice
+		//   within the same user's namespace, causing confusion about which account's token
+		//   controls the zone.
+		//
+		// WHY admin (user_id IS NULL) uses a separate branch:
+		//   getSessionUserID returns "" for the Server Admin session. NULL FK is the DB
+		//   sentinel for admin-owned accounts. The SQL IS NULL check matches those rows;
+		//   passing "" as a parameter would match no rows (WHERE a.user_id = '' finds nothing).
 		//
 		// WHY exclude empty names:
 		//   The HE.net zone list scraper may return stub entries with blank zone names
@@ -969,8 +979,22 @@ func handleAccountLoadZones(db *sql.DB, sm *browser.SessionManager, breakers *re
 		//   Storing a zone with name="" would break the (account_id, name) PRIMARY KEY.
 		//
 		// WHY build a map (not a nested loop): O(n) lookup vs O(n*m) for large zone lists.
-		existingRows, dbErr := db.QueryContext(r.Context(),
-			`SELECT DISTINCT name FROM zones`)
+		userID := getSessionUserID(r)
+		var existingRows *sql.Rows
+		var dbErr error
+		if userID == "" {
+			// Admin session: exclude zones under admin-owned accounts (user_id IS NULL).
+			existingRows, dbErr = db.QueryContext(r.Context(),
+				`SELECT DISTINCT z.name FROM zones z
+				 JOIN accounts a ON a.id = z.account_id
+				 WHERE a.user_id IS NULL`)
+		} else {
+			// Account User session: exclude zones under any of this user's accounts.
+			existingRows, dbErr = db.QueryContext(r.Context(),
+				`SELECT DISTINCT z.name FROM zones z
+				 JOIN accounts a ON a.id = z.account_id
+				 WHERE a.user_id = ?`, userID)
+		}
 		existingNames := make(map[string]bool)
 		if dbErr == nil {
 			for existingRows.Next() {
