@@ -79,9 +79,10 @@ build-linux:
   script:
     - go build -o dnshenet-server-linux-amd64 ./cmd/server
   artifacts:
+    name: "dnshenet-server-linux-amd64-$VERSION"
     paths:
       - dnshenet-server-linux-amd64
-    expire_in: 1 hour
+    expire_in: 7 days
 
 build-windows:
   stage: build
