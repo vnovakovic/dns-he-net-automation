@@ -141,21 +141,27 @@
   }
 
   // --- DELETE builders ---
-  // DELETE /api/v1/records?name=ZONE_NAME&type=TYPE
+  // DELETE /api/v1/zones/{zoneId}/records?name=NAME&type=TYPE
   // Deletes a record by name + type (the "delete by name" endpoint).
   // WHY by-name endpoint (not by-ID): the operator typically knows the record name
   //   but not the internal HE zone record ID. The by-name endpoint is more practical
   //   for automation scripts.
+  // WHY zoneId in the path (not omitted): the API route is nested under /zones/{zoneID}/
+  //   records — omitting it hits no route and returns 404 not_found. zoneId is passed
+  //   from data-zone-id on the button (the numeric HE zone ID, e.g. "1110810").
   // WHY use recordName() for DELETE name:
   //   TXT → apex zone name (correct, no subdomain needed for SPF/DKIM etc.)
   //   A/AAAA/CNAME → {subdomain}.zone — the curly-brace placeholder makes it
   //   impossible to mistake for a real hostname, preventing accidental deletion
   //   of the wrong record if the operator forgets to fill in the subdomain.
+  //
+  // PREVIOUSLY WRONG: used /api/v1/records?name=... (missing /zones/{zoneId}/)
+  //   which matched no route → always returned 404 not_found.
 
   function buildDeleteBash(base, zoneId, type, dynamic, zone, token) {
     var name = recordName(type, zone);
     return (
-      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '" \\\n' +
+      'curl -sk -X DELETE "' + base + '/api/v1/zones/' + zoneId + '/records?name=' + name + '&type=' + type + '" \\\n' +
       '  -H "Authorization: Bearer ' + token + '"'
     );
   }
@@ -163,7 +169,7 @@
   function buildDeleteCmd(base, zoneId, type, dynamic, zone, token) {
     var name = recordName(type, zone);
     return (
-      'curl -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '"' +
+      'curl -sk -X DELETE "' + base + '/api/v1/zones/' + zoneId + '/records?name=' + name + '&type=' + type + '"' +
       ' -H "Authorization: Bearer ' + token + '"'
     );
   }
@@ -171,7 +177,7 @@
   function buildDeletePs(base, zoneId, type, dynamic, zone, token) {
     var name = recordName(type, zone);
     return (
-      'curl.exe -sk -X DELETE "' + base + '/api/v1/records?name=' + name + '&type=' + type + '" `\n' +
+      'curl.exe -sk -X DELETE "' + base + '/api/v1/zones/' + zoneId + '/records?name=' + name + '&type=' + type + '" `\n' +
       '  -H "Authorization: Bearer ' + token + '"'
     );
   }
