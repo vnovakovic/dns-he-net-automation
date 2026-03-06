@@ -196,24 +196,40 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 		return "", "", fmt.Errorf("sign jwt: %w", err)
 	}
 
-	// Prefix the JWT with its JTI so the token is self-identifying.
+	// Build the full token string with a human-readable prefix.
 	//
-	// WHY prefix with JTI (not rely on JWT payload decoding):
-	//   The JTI is buried inside the base64-encoded JWT payload. An operator holding a
-	//   token string has no quick way to know which DB row to revoke without base64-decoding
-	//   and JSON-parsing the middle segment. Prefixing makes it trivial:
-	//     token = "6f2647d8-ff3d-4922-bac5-0aca3a6f11e2.eyJhbGci..."
-	//   The operator reads the first segment up to the first dot — that is the JTI to revoke.
+	// Format: dns-he-net.{accountID}.{role}--{jti}.{jwt}
 	//
-	// WHY "." as the separator (same as JWT internal separator):
-	//   UUID v4 contains only hex digits and hyphens — no dots. The first dot in the
-	//   prefixed token is therefore always the JTI/JWT boundary. SplitN(token, ".", 2)
-	//   in ValidateToken safely strips the prefix without ambiguity.
+	// WHY human-readable prefix (dns-he-net.{account}.{role}--):
+	//   An operator looking at a token in a config file or environment variable can
+	//   immediately tell which service, account, and role it belongs to without
+	//   base64-decoding the JWT payload. This prevents mixing up tokens from different
+	//   accounts or misidentifying a viewer token as an admin token.
+	//   Example: dns-he-net.primary.admin--6f2647d8-ff3d-4922-bac5-0aca3a6f11e2.eyJhbG...
+	//
+	// WHY "--" as the prefix/token separator (not "."):
+	//   The readable prefix itself contains dots (dns-he-net. and {account}.{role}).
+	//   Using "." as the separator would break the existing SplitN(token, ".", 2) logic
+	//   used to strip the JTI from the JWT. "--" is safe because:
+	//     - Account IDs use alphanumeric + single hyphens (never double)
+	//     - Role values are "admin" or "viewer" (no hyphens at all)
+	//     - UUID v4 uses single hyphens between segments (never double)
+	//     - The JWT base64url alphabet contains no hyphens at all
+	//   So "--" appears exactly once, at the prefix/token boundary.
+	//
+	// WHY keep {jti}.{jwt} after "--" (not just the JWT):
+	//   The JTI prefix makes the inner token self-identifying for revocation —
+	//   the operator reads the first UUID segment to find the DB row to revoke.
+	//   This property is preserved inside the "--" boundary.
+	//
+	// BACKWARD COMPATIBILITY: ValidateToken detects the "--" boundary before splitting.
+	//   Old tokens without the prefix (just {jti}.{jwt}) continue to work — they have
+	//   no "--" so ValidateToken uses them as-is.
 	//
 	// HASH covers the full prefixed token (not just the JWT):
 	//   Both issuance (here) and validation (ValidateToken) hash the same full string,
 	//   so the token_hash DB column continues to bind the token to its DB row correctly.
-	rawToken = jti + "." + jwtString
+	rawToken = "dns-he-net." + accountID + "." + role + "--" + jti + "." + jwtString
 
 	// Compute the SHA-256 hash — this is the only token value persisted in the DB (SEC-02).
 	tokenHash := hashToken(rawToken)
@@ -266,13 +282,29 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label string, 
 func ValidateToken(ctx context.Context, db *sql.DB, rawToken string, secret []byte) (*Claims, error) {
 	var claims Claims
 
-	// Strip the JTI prefix before JWT parsing.
+	// Strip the human-readable prefix (if present), then strip the JTI prefix.
 	//
-	// Format: {jti}.{header}.{payload}.{signature}
-	// SplitN with n=2 splits on the first dot only — UUID contains no dots, so this is
-	// unambiguous. The jwtString is passed to jwt.ParseWithClaims; rawToken (full prefixed)
-	// is used for the token_hash DB lookup so it matches what was stored at issuance.
-	parts := strings.SplitN(rawToken, ".", 2)
+	// New format: dns-he-net.{account}.{role}--{jti}.{header}.{payload}.{signature}
+	// Old format: {jti}.{header}.{payload}.{signature}  (no "--" present)
+	//
+	// Step 1 — strip "dns-he-net.{account}.{role}--" to get "{jti}.{jwt}":
+	//   Tokens issued by the current code contain "--" exactly once (at the prefix boundary).
+	//   Old tokens issued before this format was introduced have no "--" and are left as-is.
+	//   This makes the change backward-compatible: old tokens already in use continue to work.
+	//
+	// Step 2 — strip the JTI to get the raw JWT string:
+	//   SplitN on "." with n=2 splits on the first dot only. UUID v4 contains no dots,
+	//   so the first "." is always the JTI/JWT boundary.
+	//
+	// HASH: rawToken (the full string as received, including any prefix) is used for the
+	//   token_hash DB lookup. Both issuance and validation hash the same full string, so
+	//   new tokens (with prefix) and old tokens (without) are correctly matched in the DB.
+	innerToken := rawToken
+	if idx := strings.Index(rawToken, "--"); idx != -1 {
+		// WHY idx+2: "--" is two characters. Everything after is the "{jti}.{jwt}" inner token.
+		innerToken = rawToken[idx+2:]
+	}
+	parts := strings.SplitN(innerToken, ".", 2)
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid token format")
 	}

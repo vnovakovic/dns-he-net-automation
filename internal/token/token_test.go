@@ -56,9 +56,10 @@ func TestIssueToken_Success(t *testing.T) {
 	rawToken, jti, err := token.IssueToken(ctx, db, "acct-1", "admin", "my-label", 30, testSecret, nil)
 	require.NoError(t, err)
 
-	// Token format: {jti}.{jwt} — jti prefix makes the token self-identifying for revocation.
-	assert.True(t, strings.HasPrefix(rawToken, jti+"."), "rawToken should start with its JTI prefix")
-	assert.True(t, strings.Contains(rawToken, ".eyJ"), "rawToken should contain a JWT after the JTI prefix")
+	// Token format: dns-he-net.{account}.{role}--{jti}.{jwt}
+	assert.True(t, strings.HasPrefix(rawToken, "dns-he-net.acct-1.admin--"), "rawToken should start with readable prefix")
+	assert.True(t, strings.Contains(rawToken, "--"+jti+"."), "rawToken should contain the JTI after --")
+	assert.True(t, strings.Contains(rawToken, ".eyJ"), "rawToken should contain a JWT")
 	assert.NotEmpty(t, jti, "jti should be a non-empty UUID")
 
 	// Verify DB state: token_hash matches sha256 of rawToken, revoked_at is NULL.
