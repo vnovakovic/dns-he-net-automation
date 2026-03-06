@@ -16,9 +16,7 @@
 //   Three tabs (bash | cmd | PowerShell) switch the displayed command variant.
 
 (function () {
-  // recordName returns the canonical record name for the given type.
-  // TXT records live at the apex zone name; all others use a bracketed placeholder subdomain.
-  // WHY apex for TXT: SPF, DKIM, DMARC, and most TXT records are placed on the zone root.
+  // recordName returns the record name placeholder for curl examples.
   // WHY {subdomain} in braces (not a literal word like "subdomain"):
   //   A literal "subdomain.example.com" looks like a real hostname — the operator
   //   might paste the example and forget to replace the prefix, accidentally targeting
@@ -26,7 +24,7 @@
   //   Curly-brace syntax is universally recognised as "fill this in" and makes the
   //   placeholder impossible to mistake for a real hostname that should be kept as-is.
   function recordName(type, zone) {
-    return type === 'TXT' ? zone : '{subdomain}.' + zone;
+    return '{subdomain}.' + zone;
   }
 
   // bodyForType returns the POST request body object for a given record type.
