@@ -5,17 +5,26 @@ import (
 	"github.com/vnovakov/dns-he-net-automation/internal/audit"
 )
 
-// AuditPage renders the paginated audit log table, newest entries first.
+// AuditPage renders the audit log table with the first 100 entries and a
+// htmx "load more" button at the bottom.
 //
-// WHY 50 entries per page (Claude's Discretion — CONTEXT.md):
-//   The audit log can grow large over time. 50 rows balances visibility and
-//   page load time. The pageSize constant in the handler matches this expectation.
+// WHY 100 entries per page (up from 50):
+//   100 rows is a good "one screen of history" on a modern monitor. Operators
+//   scrolling the log rarely need exactly 50 — 100 covers more ground per click.
+//
+// WHY htmx load-more (not Previous/Next page navigation):
+//   Full-page navigation loses scroll position and forces the operator to navigate
+//   back. The load-more pattern appends rows in-place, preserving context.
+//   The "..." button is placed below the table so it is visible only when more rows
+//   exist. Clicking it fires GET /admin/audit/more?offset=N which returns new <tr>
+//   rows (appended to #audit-rows) plus an OOB-swapped #audit-load-more div that
+//   either contains the next "..." button or is empty (no more rows).
 //
 // WHY action column is color-coded:
 //   Operators need to quickly identify destructive operations (delete=red) vs.
-//   safe reads. Color-coding follows the same badge system used across the UI:
+//   safe reads. Color-coding follows the badge system used across the UI:
 //   create=green, update=yellow, delete=red, sync/import=blue.
-templ AuditPage(entries []audit.Entry, page, totalPages int, data PageData) {
+templ AuditPage(entries []audit.Entry, hasMore bool, nextOffset int, data PageData) {
 	@Layout(data) {
 		<div class="page-header">
 			<h2>Audit Log</h2>
@@ -32,24 +41,9 @@ templ AuditPage(entries []audit.Entry, page, totalPages int, data PageData) {
 						<th>Token</th>
 					</tr>
 				</thead>
-				<tbody>
+				<tbody id="audit-rows">
 					for _, e := range entries {
-						<tr>
-							<td>{ e.CreatedAt.Format("2006-01-02 15:04:05") }</td>
-							<td><code>{ e.AccountID }</code></td>
-							<td>
-								<span class={ "badge " + auditActionClass(e.Action) }>{ e.Action }</span>
-							</td>
-							<td>{ e.Resource }</td>
-							<td>
-								if e.Result == "success" {
-									<span class="badge badge-success">success</span>
-								} else {
-									<span class="badge badge-danger">{ e.Result }</span>
-								}
-							</td>
-							<td><code>{ tokenPrefix(e.TokenID) }</code></td>
-						</tr>
+						@AuditRow(e)
 					}
 					if len(entries) == 0 {
 						<tr>
@@ -58,19 +52,72 @@ templ AuditPage(entries []audit.Entry, page, totalPages int, data PageData) {
 					}
 				</tbody>
 			</table>
-			if totalPages > 1 {
-				<div class="pagination" style="margin-top:1rem;">
-					if page > 1 {
-						<a href={ templ.SafeURL(fmt.Sprintf("/admin/audit?page=%d", page-1)) } class="btn btn-sm">Previous</a>
-					}
-					<span>Page { fmt.Sprintf("%d", page) } of { fmt.Sprintf("%d", totalPages) }</span>
-					if page < totalPages {
-						<a href={ templ.SafeURL(fmt.Sprintf("/admin/audit?page=%d", page+1)) } class="btn btn-sm">Next</a>
-					}
-				</div>
-			}
+			// Load-more button — replaced by htmx OOB swap after each load.
+			// Empty div when there are no more rows (button disappears).
+			<div id="audit-load-more" style="margin-top:0.75rem;text-align:center;">
+				if hasMore {
+					@AuditLoadMoreBtn(nextOffset)
+				}
+			</div>
 		</div>
 	}
+}
+
+// AuditRow renders a single audit log table row.
+// Extracted so the load-more partial can reuse it without the full page wrapper.
+templ AuditRow(e audit.Entry) {
+	<tr>
+		<td>{ e.CreatedAt.Format("2006-01-02 15:04:05") }</td>
+		<td><code>{ e.AccountID }</code></td>
+		<td>
+			<span class={ "badge " + auditActionClass(e.Action) }>{ e.Action }</span>
+		</td>
+		<td>{ e.Resource }</td>
+		<td>
+			if e.Result == "success" {
+				<span class="badge badge-success">success</span>
+			} else {
+				<span class="badge badge-danger">{ e.Result }</span>
+			}
+		</td>
+		<td><code>{ tokenPrefix(e.TokenID) }</code></td>
+	</tr>
+}
+
+// AuditLoadMoreBtn renders the "..." button that triggers the next page load.
+// hx-target="#audit-rows" + hx-swap="beforeend" appends new rows to the table.
+// The OOB-swapped #audit-load-more div in the response replaces this button.
+templ AuditLoadMoreBtn(offset int) {
+	<button
+		class="btn btn-sm"
+		style="letter-spacing:0.15em;"
+		hx-get={ fmt.Sprintf("/admin/audit/more?offset=%d", offset) }
+		hx-target="#audit-rows"
+		hx-swap="beforeend"
+		hx-indicator="#audit-loading">
+		…
+	</button>
+	<span id="audit-loading" class="htmx-indicator text-muted" style="margin-left:0.5rem;">Loading…</span>
+}
+
+// AuditMorePartial is the htmx partial response for GET /admin/audit/more.
+// Returns new <tr> rows appended to #audit-rows via hx-swap="beforeend",
+// plus an OOB swap of #audit-load-more to show the next button or clear it.
+//
+// WHY hx-swap-oob on the load-more div (not hx-target):
+//   The primary hx-target is #audit-rows (for appending rows). The load-more
+//   button itself lives in a sibling div — OOB swap lets htmx update both the
+//   tbody (beforeend) and the button div (outerHTML) in a single response.
+templ AuditMorePartial(entries []audit.Entry, hasMore bool, nextOffset int) {
+	for _, e := range entries {
+		@AuditRow(e)
+	}
+	// OOB swap replaces the #audit-load-more div with the next button or clears it.
+	<div id="audit-load-more" hx-swap-oob="true" style="margin-top:0.75rem;text-align:center;">
+		if hasMore {
+			@AuditLoadMoreBtn(nextOffset)
+		}
+	</div>
 }
 
 // auditActionClass returns the CSS badge class for an audit log action.

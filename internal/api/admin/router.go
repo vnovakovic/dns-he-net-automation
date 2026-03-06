@@ -160,6 +160,7 @@ func RegisterAdminRoutes(
 
 			// Audit log page (handler replaced by plan 04).
 			r.Get("/audit", handleAuditPage(db))
+			r.Get("/audit/more", handleAuditMore(db))
 
 			// User management — admin-only (guarded inside each handler).
 			// Account Users are DB-backed operator accounts that each see only their own
@@ -1317,44 +1318,61 @@ func handleAdminZoneImport(sm *browser.SessionManager, breakers *resilience.Brea
 	}
 }
 
-// handleAuditPage renders the paginated audit log (GET /admin/audit).
+// handleAuditPage renders the audit log page (GET /admin/audit).
+// Shows the first 100 entries newest-first. A load-more button at the bottom
+// fires GET /admin/audit/more?offset=100 to append subsequent batches via htmx.
 //
-// WHY pageSize=50 (Claude's Discretion):
-//   50 entries balances visibility (enough history at a glance) with page weight
-//   (each row is a short DB read). CONTEXT.md notes this as a discretionary value.
-//
-// WHY totalPages never 0:
-//   If the audit log is empty (totalCount=0), the ceiling division returns 0.
-//   We clamp to 1 so the template always shows "Page 1 of 1" rather than
-//   "Page 1 of 0" which would be confusing to operators.
+// WHY pageSize=100 (up from 50):
+//   100 rows covers more history per click without excessive page weight.
+//   The load-more pattern (not Previous/Next) avoids full-page navigation and
+//   lets operators keep their scroll position while loading additional history.
 func handleAuditPage(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		const pageSize = 50
-		pageNum := 1
-		if p := r.URL.Query().Get("page"); p != "" {
-			if n, err := strconv.Atoi(p); err == nil && n > 0 {
-				pageNum = n
-			}
-		}
-		offset := (pageNum - 1) * pageSize
-
-		entries, err := audit.List(db, pageSize, offset)
+		const pageSize = 100
+		entries, err := audit.List(db, pageSize+1, 0)
 		if err != nil {
 			http.Error(w, "Failed to load audit log", http.StatusInternalServerError)
 			return
 		}
-		totalCount, _ := audit.Count(db)
-		totalPages := (totalCount + pageSize - 1) / pageSize
-		if totalPages == 0 {
-			totalPages = 1
+		hasMore := len(entries) > pageSize
+		if hasMore {
+			entries = entries[:pageSize]
 		}
-
 		data := templates.PageData{Title: "Audit Log", ActivePage: "audit", IsAdmin: isAdminSession(r), Username: sessionDisplayName(r), Role: sessionRole(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = templates.AuditPage(entries, pageNum, totalPages, data).Render(r.Context(), w)
+		_ = templates.AuditPage(entries, hasMore, pageSize, data).Render(r.Context(), w)
 	}
 }
 
+// handleAuditMore is the htmx partial handler for GET /admin/audit/more?offset=N.
+// Returns new <tr> rows (appended to #audit-rows by hx-swap=eforeend\) plus an
+// OOB-swapped #audit-load-more div with the next \...\ button or empty if done.
+//
+// WHY fetch pageSize+1 entries:
+//   Fetching one extra row lets the handler detect whether more rows exist without
+//   a separate COUNT query. If len(entries) > pageSize, there is a next page.
+func handleAuditMore(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		const pageSize = 100
+		offset := 0
+		if o := r.URL.Query().Get("offset"); o != "" {
+			if n, err := strconv.Atoi(o); err == nil && n >= 0 {
+				offset = n
+			}
+		}
+		entries, err := audit.List(db, pageSize+1, offset)
+		if err != nil {
+			http.Error(w, "Failed to load audit log", http.StatusInternalServerError)
+			return
+		}
+		hasMore := len(entries) > pageSize
+		if hasMore {
+			entries = entries[:pageSize]
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = templates.AuditMorePartial(entries, hasMore, offset+pageSize).Render(r.Context(), w)
+	}
+}
 // handleUsersPage renders the user management page (GET /admin/users).
 // Admin-only: Account Users cannot manage other users.
 //
