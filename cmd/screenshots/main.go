@@ -101,7 +101,23 @@ func main() {
 	// settle pauses briefly so CSS transitions finish before the screenshot.
 	settle := func() { time.Sleep(500 * time.Millisecond) }
 
+	// maskUsernames hides the (username) span rendered next to account names.
+	// WHY two selectors:
+	//   accounts.templ renders: <h3>acc.Name <span class="text-muted">(acc.Username)</span></h3>
+	//   tokens.templ renders:   <div class="card-header"><strong>...</strong> <span class="text-muted">(...)</span>
+	//   Both selectors are needed to catch both page layouts.
+	// WHY visibility:hidden (not display:none): keeps layout stable; the blank space
+	//   where the username was becomes plain white — no element reflow.
+	maskUsernames := func() {
+		_, _ = page.Evaluate(`
+			document.querySelectorAll('h3 span.text-muted, .card-header span.text-muted').forEach(el => {
+				el.style.visibility = 'hidden';
+			});
+		`)
+	}
+
 	shot := func(name string) {
+		maskUsernames()
 		settle()
 		path := filepath.Join(*outDir, name)
 		if _, err := page.Screenshot(playwright.PageScreenshotOptions{
