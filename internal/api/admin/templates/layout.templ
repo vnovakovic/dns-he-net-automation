@@ -57,11 +57,8 @@ templ Layout(data PageData) {
 				if data.IsAdmin {
 					@NavLink("/admin/users", "Users", data.ActivePage == "users")
 				}
+				@NavLink("/admin/about", "About", data.ActivePage == "about")
 				<div class="sidebar-footer">
-					// WHY About is inside sidebar-footer (not with the main nav links):
-					//   It is a utility link, not a workflow step. Placing it above Logout at the
-					//   bottom keeps the main navigation clean and matches common portal conventions.
-					@NavLink("/admin/about", "About", data.ActivePage == "about")
 					<a href="/admin/logout" class="nav-link">Logout</a>
 				</div>
 			</nav>
