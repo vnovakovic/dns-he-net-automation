@@ -43,45 +43,41 @@ RUN apt-get update && \
         tzdata && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Playwright browser binaries to a fixed, world-readable path BEFORE creating the
-# non-root user. Running as root here is intentional — `playwright install` writes system
-# libraries via apt and needs root. The fixed path makes the browsers accessible to the
-# non-root service user at runtime.
+# Set Playwright paths BEFORE running `playwright install` so both the driver and the
+# browser binaries land in fixed, accessible locations during the build step.
 #
-# WHY PLAYWRIGHT_BROWSERS_PATH=/ms-playwright (not the default /root/.cache/ms-playwright):
-#   The default install location is under /root/.cache which is mode 700 — not readable by
-#   other users. By setting PLAYWRIGHT_BROWSERS_PATH to a world-accessible path we ensure
-#   the server user (uid 1001) can reach the Chromium binary without any chown/chmod tricks.
+# WHY both ENV vars must come BEFORE `playwright install`:
+#   `playwright install` writes the Node.js driver to PLAYWRIGHT_DRIVER_PATH and the
+#   browser binaries to PLAYWRIGHT_BROWSERS_PATH. If either var is unset at install time,
+#   the files go to /root/.cache (mode 700 — unreadable by non-root users). At container
+#   startup playwright.Run() then looks in the env-var paths, finds them empty, and fails:
+#     attempt 1 (no vars): "could not create driver directory: mkdir /home/server: permission denied"
+#     attempt 2 (PLAYWRIGHT_DRIVER_PATH set after install): "please install the driver first"
 #
-# PREVIOUSLY: without this env var, `playwright install` wrote to /root/.cache/ms-playwright.
-#   The server process (uid 1001) could not read that directory → "browser not found" at runtime.
+# WHY /ms-playwright-driver and /ms-playwright (not /root/.cache):
+#   Fixed paths under / are accessible to any uid without chown tricks.
+#   The server user needs read+write on the driver dir (playwright.Run() may rewrite files
+#   there) and read-only on the browsers dir (never modified at runtime).
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PLAYWRIGHT_DRIVER_PATH=/ms-playwright-driver
 
 COPY --from=builder /go/bin/playwright /usr/local/bin/playwright
 
 # --with-deps installs ~50 system libraries required by Chromium (libx11, libnss3, etc.).
+# With the env vars above set, driver goes to /ms-playwright-driver and Chromium to /ms-playwright.
 # Without --with-deps, Chromium fails to launch with "error while loading shared libraries".
 RUN playwright install --with-deps chromium
 
 # Create a non-root user for running the service (security hardening).
 RUN useradd --system --no-create-home --uid 1001 server
 
-# Create the Playwright driver unpack directory owned by the service user.
-#
-# WHY /ms-playwright-driver:
-#   playwright-go embeds the Node.js driver binary and unpacks it to PLAYWRIGHT_DRIVER_PATH
-#   at process startup. Without a home directory (--no-create-home), the default unpack
-#   location os.UserCacheDir() resolves to /home/server which does not exist → container
-#   exits immediately with "could not create driver directory: mkdir /home/server: permission denied".
-#
-#   This is identical to the Windows service problem where LocalSystem unpacked to a
-#   different profile path than the installing user. The fix is the same: a fixed path
-#   owned by the process account, set via PLAYWRIGHT_DRIVER_PATH.
-#
-# PREVIOUSLY: no PLAYWRIGHT_DRIVER_PATH set → playwright-go called os.UserCacheDir() →
-#   tried to create /home/server → "permission denied" → service crashed on first start.
-RUN mkdir -p /ms-playwright-driver && chown server:server /ms-playwright-driver
-ENV PLAYWRIGHT_DRIVER_PATH=/ms-playwright-driver
+# Grant the service user access to the Playwright directories installed above as root.
+# WHY chown driver dir + chmod browsers dir (not the reverse):
+#   /ms-playwright-driver: chown to server — playwright.Run() needs write access to update
+#     driver files and write lock/socket files on each start.
+#   /ms-playwright: chmod a+rX — read-only at runtime; chown not needed, world-read is sufficient.
+RUN chown -R server:server /ms-playwright-driver && \
+    chmod -R a+rX /ms-playwright
 
 # Create persistent data directory owned by the service user.
 # WHY /data (not /etc or /var/lib):
