@@ -317,6 +317,40 @@ func main() {
 		cfg.RateLimitGlobalRPM, cfg.RateLimitPerTokenRPM, vaultHealthFn, reg,
 		cfg.AdminUsername, cfg.AdminPassword, cfg.AdminSessionKey)
 
+	// Auto-generate a self-signed TLS certificate on first start when SSL_CERT/SSL_KEY paths
+	// are configured but the files do not yet exist.
+	//
+	// WHY here (in main, not only as a CLI subcommand):
+	//   Docker containers have no installer or pre-start hook — the Inno Setup [Run] trick
+	//   that works on Windows cannot be used. The binary must generate the cert itself on
+	//   first run. Checking file existence here, after slog is configured, allows a
+	//   structured log message and clean os.Exit on failure.
+	//
+	// WHY only when both SSL_CERT and SSL_KEY are non-empty:
+	//   Empty paths mean the operator chose plain HTTP (reverse proxy, local dev). Auto-gen
+	//   must not fire in that case — it would create unexpected cert files in the working dir.
+	//
+	// WHY not fall back to HTTP if gen fails:
+	//   The operator explicitly configured TLS paths. Silently serving HTTP would hide the
+	//   misconfiguration and expose the service without encryption. Fail fast is safer.
+	//
+	// PREVIOUSLY: Docker deployments fell back to HTTP because SSL_CERT/SSL_KEY paths either
+	//   pointed to non-existent files (service crash) or were left empty (plain HTTP silently).
+	//   This auto-gen ensures HTTPS is available on first container start without any manual step.
+	if cfg.SSLCert != "" && cfg.SSLKey != "" {
+		_, certMissing := os.Stat(cfg.SSLCert)
+		_, keyMissing := os.Stat(cfg.SSLKey)
+		if os.IsNotExist(certMissing) || os.IsNotExist(keyMissing) {
+			slog.Info("TLS cert/key not found — auto-generating self-signed certificate",
+				"cert", cfg.SSLCert, "key", cfg.SSLKey)
+			if err := genCertFiles(cfg.SSLCert, cfg.SSLKey); err != nil {
+				slog.Error("failed to auto-generate TLS certificate", "error", err)
+				os.Exit(1)
+			}
+			slog.Info("self-signed TLS certificate generated", "cert", cfg.SSLCert, "key", cfg.SSLKey, "valid_years", 10)
+		}
+	}
+
 	// WHY tls.Config instead of relying on ListenAndServeTLS defaults:
 	//   Go's default TLS config allows TLS 1.0/1.1 for broader compatibility, but those
 	//   versions have known vulnerabilities (BEAST, POODLE). Setting MinVersion = TLS12
@@ -519,9 +553,9 @@ func loadEnvFile() {
 	}
 }
 
-// writeEarlyDebug appends a timestamped message to C:\dnshenet-early.log.
-// runGenCert generates a self-signed ECDSA-P256 TLS certificate + private key in PEM format.
-// Called by the Inno Setup installer when server.crt does not exist at the install path.
+// genCertFiles generates a self-signed ECDSA-P256 TLS certificate + private key in PEM format
+// and writes them to the given paths. Returns an error instead of calling os.Exit so it can
+// be used both from the gen-cert subcommand and from the auto-generate path in main().
 //
 // WHY ECDSA-P256 (not RSA 2048):
 //   Smaller key, faster handshake, equivalent security. Supported by all modern TLS stacks.
@@ -531,24 +565,20 @@ func loadEnvFile() {
 //   Modern browsers and Go's tls.Dial ignore CN for validation — they only check SAN.
 //   Without a SAN entry for localhost/127.0.0.1, curl and browsers reject the cert even
 //   if the CN matches. Both the DNS name and IP forms are included to cover all access patterns.
-func runGenCert(args []string) {
-	fs := flag.NewFlagSet("gen-cert", flag.ExitOnError)
-	certPath := fs.String("cert", "server.crt", "path to write the PEM certificate")
-	keyPath := fs.String("key", "server.key", "path to write the PEM private key")
-	if err := fs.Parse(args); err != nil {
-		os.Exit(1)
-	}
-
+//
+// WHY extracted from runGenCert:
+//   main() needs to call this on Docker first-start (no installer/pre-start hook available
+//   in containers). Returning an error instead of os.Exit lets main() log it via slog and
+//   exit cleanly with a structured message. runGenCert wraps this for the CLI subcommand path.
+func genCertFiles(certPath, keyPath string) error {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gen-cert: generate key: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("generate key: %w", err)
 	}
 
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gen-cert: serial: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("generate serial: %w", err)
 	}
 
 	tmpl := &x509.Certificate{
@@ -564,39 +594,51 @@ func runGenCert(args []string) {
 
 	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gen-cert: create certificate: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("create certificate: %w", err)
 	}
 
-	// Write certificate PEM.
-	certFile, err := os.Create(*certPath)
+	certFile, err := os.Create(certPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gen-cert: create %s: %v\n", *certPath, err)
-		os.Exit(1)
+		return fmt.Errorf("create %s: %w", certPath, err)
 	}
 	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
-		fmt.Fprintf(os.Stderr, "gen-cert: write cert PEM: %v\n", err)
-		os.Exit(1)
+		certFile.Close()
+		return fmt.Errorf("write cert PEM: %w", err)
 	}
 	certFile.Close()
 
-	// Write private key PEM.
 	keyDER, err := x509.MarshalECPrivateKey(key)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gen-cert: marshal key: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("marshal key: %w", err)
 	}
-	keyFile, err := os.Create(*keyPath)
+	keyFile, err := os.Create(keyPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gen-cert: create %s: %v\n", *keyPath, err)
-		os.Exit(1)
+		return fmt.Errorf("create %s: %w", keyPath, err)
 	}
 	if err := pem.Encode(keyFile, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}); err != nil {
-		fmt.Fprintf(os.Stderr, "gen-cert: write key PEM: %v\n", err)
-		os.Exit(1)
+		keyFile.Close()
+		return fmt.Errorf("write key PEM: %w", err)
 	}
 	keyFile.Close()
 
+	return nil
+}
+
+// runGenCert is the CLI entrypoint for "server gen-cert --cert <path> --key <path>".
+// Called by the Inno Setup installer [Run] section when server.crt does not yet exist.
+// Wraps genCertFiles and exits with a human-readable message on success or failure.
+func runGenCert(args []string) {
+	fs := flag.NewFlagSet("gen-cert", flag.ExitOnError)
+	certPath := fs.String("cert", "server.crt", "path to write the PEM certificate")
+	keyPath := fs.String("key", "server.key", "path to write the PEM private key")
+	if err := fs.Parse(args); err != nil {
+		os.Exit(1)
+	}
+
+	if err := genCertFiles(*certPath, *keyPath); err != nil {
+		fmt.Fprintf(os.Stderr, "gen-cert: %v\n", err)
+		os.Exit(1)
+	}
 	fmt.Printf("Generated self-signed certificate:\n  cert: %s\n  key:  %s\n  valid: 10 years\n", *certPath, *keyPath)
 }
 

@@ -363,7 +363,7 @@ func handleAccountsPage(db *sql.DB) http.HandlerFunc {
 			zonesByAccount[acc.ID] = zones
 		}
 
-		data := templates.PageData{Title: "Accounts", ActivePage: "accounts", IsAdmin: isAdminSession(r)}
+		data := templates.PageData{Title: "Accounts", ActivePage: "accounts", IsAdmin: isAdminSession(r), Username: sessionDisplayName(r), Role: sessionRole(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.AccountsPage(accounts, zonesByAccount, data).Render(r.Context(), w)
 	}
@@ -499,7 +499,7 @@ func handleTokensPage(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
 			return
 		}
-		data := templates.PageData{Title: "Tokens", ActivePage: "tokens", IsAdmin: isAdminSession(r)}
+		data := templates.PageData{Title: "Tokens", ActivePage: "tokens", IsAdmin: isAdminSession(r), Username: sessionDisplayName(r), Role: sessionRole(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.TokensPage(accounts, data).Render(r.Context(), w)
 	}
@@ -613,7 +613,7 @@ func handleZonesPage(db *sql.DB) http.HandlerFunc {
 			zonesByAccount[acc.ID] = zones
 		}
 
-		data := templates.PageData{Title: "Zones", ActivePage: "zones", IsAdmin: isAdminSession(r)}
+		data := templates.PageData{Title: "Zones", ActivePage: "zones", IsAdmin: isAdminSession(r), Username: sessionDisplayName(r), Role: sessionRole(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.ZonesPage(accounts, zonesByAccount, data).Render(r.Context(), w)
 	}
@@ -632,7 +632,7 @@ func handleSyncPage(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "Failed to list accounts", http.StatusInternalServerError)
 			return
 		}
-		data := templates.PageData{Title: "Sync", ActivePage: "sync", IsAdmin: isAdminSession(r)}
+		data := templates.PageData{Title: "Sync", ActivePage: "sync", IsAdmin: isAdminSession(r), Username: sessionDisplayName(r), Role: sessionRole(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.SyncPage(accounts, data).Render(r.Context(), w)
 	}
@@ -1122,7 +1122,7 @@ func handleAuditPage(db *sql.DB) http.HandlerFunc {
 			totalPages = 1
 		}
 
-		data := templates.PageData{Title: "Audit Log", ActivePage: "audit", IsAdmin: isAdminSession(r)}
+		data := templates.PageData{Title: "Audit Log", ActivePage: "audit", IsAdmin: isAdminSession(r), Username: sessionDisplayName(r), Role: sessionRole(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.AuditPage(entries, pageNum, totalPages, data).Render(r.Context(), w)
 	}
@@ -1168,7 +1168,7 @@ func handleUsersPage(db *sql.DB) http.HandlerFunc {
 			users = []templates.UserRow{}
 		}
 
-		data := templates.PageData{Title: "Users", ActivePage: "users", IsAdmin: true}
+		data := templates.PageData{Title: "Users", ActivePage: "users", IsAdmin: true, Username: sessionDisplayName(r), Role: sessionRole(r)}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = templates.UsersPage(users, data).Render(r.Context(), w)
 	}

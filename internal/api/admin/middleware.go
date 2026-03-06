@@ -54,6 +54,24 @@ func getSessionUserID(r *http.Request) string {
 	return v
 }
 
+// sessionDisplayName returns the username to show in the top-bar identity badge.
+// Admin sessions always show "admin"; Account User sessions show their user ID.
+func sessionDisplayName(r *http.Request) string {
+	if isAdminSession(r) {
+		return "admin"
+	}
+	return getSessionUserID(r)
+}
+
+// sessionRole returns the human-readable role label for the top-bar identity badge.
+// "Admin" for the env-configured server admin; "User" for Account Users.
+func sessionRole(r *http.Request) string {
+	if isAdminSession(r) {
+		return "Admin"
+	}
+	return "User"
+}
+
 // AdminAuth returns a middleware that protects /admin routes with Basic Auth + session cookie.
 //
 // Check order (CONTEXT.md decision — Basic Auth checked before cookie):

@@ -5,12 +5,17 @@ package templates
 //
 // WHY IsAdmin bool (not a role string):
 //   The only conditional in the UI is "show Users nav link or not". A bool is simpler
-//   and avoids stringly-typed role comparisons in templates. If more role-specific
-//   rendering is needed in future, extend PageData then.
+//   and avoids stringly-typed role comparisons in templates.
+//
+// WHY Username + Role separate from IsAdmin:
+//   IsAdmin drives nav visibility; Username/Role drive the identity badge in the top bar.
+//   Keeping them separate avoids re-deriving one from the other inside templates.
 type PageData struct {
 	Title      string
 	ActivePage string // "accounts", "tokens", "zones", "sync", "audit", "users"
 	IsAdmin    bool   // true for env-configured Server Admin; false for Account Users
+	Username   string // display name shown in top-bar identity badge
+	Role       string // "Admin" or "User" shown next to the username
 }
 
 // Layout is the base HTML template wrapping all admin pages.
@@ -52,6 +57,9 @@ templ Layout(data PageData) {
 			<div class="page-wrapper">
 				<header class="top-bar">
 					<span class="top-bar-title">{ data.Title }</span>
+					if data.Username != "" {
+						<span class="top-bar-user">{ data.Username } <span class="top-bar-role">{ data.Role }</span></span>
+					}
 				</header>
 				<main class="main-content">
 					{ children... }
