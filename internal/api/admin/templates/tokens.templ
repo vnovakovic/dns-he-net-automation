@@ -31,7 +31,10 @@ templ TokensPage(accounts []model.Account, data PageData) {
 		for _, acc := range accounts {
 			<div class="card" style="margin-bottom:1rem;">
 				<div class="card-header">
-					<strong>{ acc.ID }</strong>
+					// WHY acc.Name (not acc.ID): after migration 010, acc.ID is a UUID — opaque
+					// to the operator. acc.Name is the human-chosen label (e.g. "primary").
+					// htmx URLs and div IDs keep acc.ID (UUID) as the stable routing key.
+					<strong>{ acc.Name }</strong>
 					<span class="text-muted">({ acc.Username })</span>
 					<button
 						class="btn btn-sm"
