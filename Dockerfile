@@ -34,7 +34,7 @@ FROM ubuntu:noble
 # OCI standard image labels (OPS-05).
 LABEL org.opencontainers.image.title="dns-he-net-automation"
 LABEL org.opencontainers.image.description="REST API wrapper for dns.he.net via browser automation"
-LABEL org.opencontainers.image.source="https://github.com/vnovakov/dns-he-net-automation"
+LABEL org.opencontainers.image.source="https://github.com/HE_username/dns-he-net-automation"
 
 # Install system dependencies: CA certs for HTTPS, tzdata for time zones.
 RUN apt-get update && \

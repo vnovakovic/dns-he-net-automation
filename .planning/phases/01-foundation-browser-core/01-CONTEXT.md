@@ -37,7 +37,7 @@ DNS API surface, JWT tokens, and admin UI are NOT in this phase.
 - Multiple HE accounts supported from day one
 - Format: **JSON array** in single env var:
   ```
-  HE_ACCOUNTS=[{"id":"prod","username":"vnovakov","password":"..."}]
+  HE_ACCOUNTS=[{"id":"prod","username":"HE_username","password":"..."}]
   ```
 - Account ID is used to scope sessions and (later) tokens
 - `PORT` env var for HTTP listen port, default 8080
@@ -253,4 +253,4 @@ Form: form[name="add_bind_zone"] → POST /index.cgi
 
 *Phase: 01-foundation-browser-core*
 *Context gathered: 2026-02-27*
-*HE.net selectors verified live via Playwright MCP on account: vnovakov*
+*HE.net selectors verified live via Playwright MCP on account: HE_username*

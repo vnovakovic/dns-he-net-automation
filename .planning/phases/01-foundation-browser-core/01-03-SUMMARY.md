@@ -63,7 +63,7 @@ completed: 2026-02-28
 
 # Phase 1 Plan 03: Page Objects and Session Health Summary
 
-**Page object layer (LoginPage, ZoneListPage, RecordFormPage) with 28 verified CSS selectors and real ensureHealthy 4-case health check -- live integration test passed against dns.he.net with user vnovakov**
+**Page object layer (LoginPage, ZoneListPage, RecordFormPage) with 28 verified CSS selectors and real ensureHealthy 4-case health check -- live integration test passed against dns.he.net with user HE_username**
 
 ## Performance
 
@@ -83,7 +83,7 @@ completed: 2026-02-28
 - `ForceRelogin(ctx, accountID)` public method for explicit recovery flows
 - `createBrowserSession` and `closeBrowserContext` private helpers encapsulate Playwright lifecycle
 - Unit tests: 28 selector constants non-empty, all 17 RecordType constants verified
-- Integration test `TestLogin_Integration` PASSED in 5.80s against real dns.he.net -- `IsLoggedIn=true` confirmed for user vnovakov
+- Integration test `TestLogin_Integration` PASSED in 5.80s against real dns.he.net -- `IsLoggedIn=true` confirmed for user HE_username
 - All 7 packages pass `go test ./...`; `go build ./...` and `go vet ./...` clean
 
 ## Task Commits

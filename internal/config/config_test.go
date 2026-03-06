@@ -60,7 +60,7 @@ func TestLoad_MissingRequired(t *testing.T) {
 }
 
 func TestLoad_CustomValues(t *testing.T) {
-	t.Setenv("HE_ACCOUNTS", `[{"id":"prod","username":"vnovakov","password":"secret"}]`)
+	t.Setenv("HE_ACCOUNTS", `[{"id":"prod","username":"HE_username","password":"secret"}]`)
 	t.Setenv("JWT_SECRET", "custom-secret-at-least-32-chars-long")
 	t.Setenv("PORT", "9090")
 	t.Setenv("DB_PATH", "/data/custom.db")

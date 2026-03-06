@@ -24,7 +24,7 @@ playwright-go v0.5700.1 is the current release (Feb 24, 2026). It is a thin Go c
 - **Session recovery**: transparent retry, `OPERATION_TIMEOUT_SEC` configurable (default 30s)
 - **Port**: `PORT` env var, default 8080
 - **All config from env vars only** (12-factor, no config file)
-- **Test zone**: `royalheadshots.online` (zone ID: 1294061) on production account `vnovakov`
+- **Test zone**: `royalheadshots.online` (zone ID: 1294061) on production account `HE_username`
 - **Session expiry**: start with 30-minute proactive re-login threshold
 - **Rate limiting**: start with 1.5s minimum delay between browser operations
 - **All selectors verified live** (see CONTEXT.md `<specifics>` section)
