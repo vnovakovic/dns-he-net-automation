@@ -23,6 +23,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	playwright "github.com/playwright-community/playwright-go"
 	"github.com/vnovakov/dns-he-net-automation/internal/api"
@@ -495,7 +496,7 @@ func runTokenCreate() {
 	// We skip "create" (os.Args[2]) and parse from os.Args[3:].
 	// If os.Args[2] is not "create", treat all of os.Args[2:] as flags (backward compat).
 	fs := flag.NewFlagSet("token create", flag.ExitOnError)
-	accountID := fs.String("account", "", "Account ID to scope the token to (required)")
+	accountName := fs.String("account", "", "Account name to scope the token to (required)")
 	role := fs.String("role", "admin", "Token role: admin or viewer")
 	label := fs.String("label", "", "Optional human-readable label")
 	expiresInDays := fs.Int("expires-in-days", 0, "Expiry in days; 0 = unlimited")
@@ -508,9 +509,9 @@ func runTokenCreate() {
 	}
 	_ = fs.Parse(parseArgs)
 
-	if *accountID == "" {
+	if *accountName == "" {
 		fmt.Fprintln(os.Stderr, "error: --account is required")
-		fmt.Fprintln(os.Stderr, "usage: HE_ACCOUNTS=dummy JWT_SECRET=<secret> DB_PATH=<path> ./server token create --account <id> --role admin|viewer [--label <text>] [--expires-in-days <n>]")
+		fmt.Fprintln(os.Stderr, "usage: HE_ACCOUNTS=dummy JWT_SECRET=<secret> DB_PATH=<path> ./server token create --account <name> --role admin|viewer [--label <text>] [--expires-in-days <n>]")
 		os.Exit(1)
 	}
 
@@ -528,19 +529,41 @@ func runTokenCreate() {
 	}
 	defer db.Close()
 
-	// Ensure the account row exists (tokens table has FK -> accounts).
-	// Bootstrap scenario: account may not yet be registered via POST /api/v1/accounts.
-	// INSERT OR IGNORE so repeated bootstrap calls are idempotent.
+	// Resolve account name → UUID.
+	//
+	// WHY resolve by name (not accept UUID from flag):
+	//   The --account flag was always a human-readable label (e.g. "primary").
+	//   After migration 010, the label lives in accounts.name; the PK is a UUID.
+	//   We keep the flag semantics unchanged (name) and resolve to UUID here.
+	//   This means: existing bootstrap scripts (--account primary) continue to work.
+	//
+	// Bootstrap INSERT: if the account doesn't exist yet (new deployment), create it
+	//   with a fresh UUID. INSERT OR IGNORE so repeated calls are idempotent —
+	//   subsequent calls find the existing row by name and use its UUID.
+	//
+	// WHY user_id IS NULL: bootstrap tokens are always admin-owned (not scoped to an
+	//   Account User). NULL user_id = admin-owned, consistent with all admin-created accounts.
+	bootstrapID := uuid.New().String()
 	_, err = db.ExecContext(context.Background(),
-		`INSERT OR IGNORE INTO accounts (id, username) VALUES (?, ?)`,
-		*accountID, *accountID,
+		`INSERT OR IGNORE INTO accounts (id, name, username) VALUES (?, ?, ?)`,
+		bootstrapID, *accountName, *accountName,
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: ensure account: %v\n", err)
 		os.Exit(1)
 	}
 
-	rawToken, jti, err := token.IssueToken(context.Background(), db, *accountID, *role, *label, *zoneID, *zoneName, *expiresInDays, []byte(cfg.JWTSecret), nil)
+	// Resolve the actual UUID (may differ from bootstrapID if the account already existed).
+	var resolvedID string
+	err = db.QueryRowContext(context.Background(),
+		`SELECT id FROM accounts WHERE name = ? AND user_id IS NULL`, *accountName,
+	).Scan(&resolvedID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: resolve account by name: %v\n", err)
+		os.Exit(1)
+	}
+
+	rawToken, jti, err := token.IssueToken(context.Background(), db, resolvedID, *accountName, *role, *label, *zoneID, *zoneName, *expiresInDays, []byte(cfg.JWTSecret), nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: issue token: %v\n", err)
 		os.Exit(1)

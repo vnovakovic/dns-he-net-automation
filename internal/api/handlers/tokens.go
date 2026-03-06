@@ -80,7 +80,21 @@ func IssueToken(db *sql.DB, secret []byte, recoveryKey *[32]byte) http.HandlerFu
 			return
 		}
 
-		rawToken, jti, err := token.IssueToken(r.Context(), db, accountID, req.Role, req.Label, req.ZoneID, req.ZoneName, req.ExpiresInDays, secret, recoveryKey)
+		// Look up account name for the human-readable token prefix.
+		// WHY look up here (not pass from client): the name is stored in the DB and must
+		// match the accounts row. Accepting it from the request body would allow the caller
+		// to embed an arbitrary string in the prefix (spoofing another account's name).
+		// Non-fatal: if the lookup fails the token is still issued; the prefix will use the
+		// UUID as a fallback, which is less readable but functionally correct.
+		var accountName string
+		_ = db.QueryRowContext(r.Context(),
+			`SELECT name FROM accounts WHERE id = ?`, accountID,
+		).Scan(&accountName)
+		if accountName == "" {
+			accountName = accountID // fallback to UUID if name lookup fails
+		}
+
+		rawToken, jti, err := token.IssueToken(r.Context(), db, accountID, accountName, req.Role, req.Label, req.ZoneID, req.ZoneName, req.ExpiresInDays, secret, recoveryKey)
 		if err != nil {
 			response.WriteError(w, http.StatusInternalServerError, "issue_error", "Failed to issue token")
 			return

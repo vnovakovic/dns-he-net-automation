@@ -157,7 +157,13 @@ func hashToken(rawToken string) string {
 // SHA-256 hash in the database, and returns the raw token string along with the jti.
 //
 // Parameters:
-//   - accountID: the account this token belongs to (must exist in the accounts table)
+//   - accountID: the account UUID this token belongs to (must exist in the accounts table).
+//     Stored in Claims.AccountID and used for all enforcement checks.
+//   - accountName: the user-chosen account label (e.g. "primary"). Used ONLY in the
+//     human-readable token prefix for operator readability. Never used for enforcement.
+//     WHY separate from accountID: after migration 010, accountID is a UUID (opaque);
+//     embedding the UUID in the prefix would make tokens unreadable. The name gives
+//     operators the context they need without compromising enforcement integrity.
 //   - role: must be "admin" or "viewer" (TOKEN-03)
 //   - label: optional human-readable label (may be empty string)
 //   - zoneID: optional numeric HE zone ID to scope the token to a single zone.
@@ -175,7 +181,7 @@ func hashToken(rawToken string) string {
 //
 // The returned rawToken is shown to the user once. It is NOT stored in plaintext — only
 // the SHA-256 hash is always persisted; the encrypted form is stored only when recoveryKey != nil.
-func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label, zoneID, zoneName string, expiresInDays int, secret []byte, recoveryKey *[32]byte) (rawToken string, jti string, err error) {
+func IssueToken(ctx context.Context, db *sql.DB, accountID, accountName, role, label, zoneID, zoneName string, expiresInDays int, secret []byte, recoveryKey *[32]byte) (rawToken string, jti string, err error) {
 	// Validate role against the allowed set (TOKEN-03).
 	if role != "admin" && role != "viewer" {
 		return "", "", fmt.Errorf("invalid role %q: must be \"admin\" or \"viewer\"", role)
@@ -218,8 +224,16 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label, zoneID,
 
 	// Build the full token string with a human-readable prefix.
 	//
-	// Account-wide token format:  dns-he-net.{accountID}.{role}--{jti}.{jwt}
-	// Zone-scoped token format:   dns-he-net.{accountID}.{zoneName}.{role}--{jti}.{jwt}
+	// Account-wide token format:  dns-he-net.{accountName}.{role}--{jti}.{jwt}
+	// Zone-scoped token format:   dns-he-net.{accountName}.{zoneName}.{role}--{jti}.{jwt}
+	//
+	// WHY accountName in prefix (not accountID/UUID):
+	//   After migration 010, accountID is a UUID (e.g. "a3f9b2c1..."). Embedding the UUID
+	//   in the prefix would produce tokens like "dns-he-net.a3f9b2c1d4e5f6a7.admin--..." —
+	//   unreadable and useless for human identification. accountName is the operator-chosen
+	//   label (e.g. "primary") which makes the prefix meaningful at a glance.
+	//   Enforcement (auth, isolation) always uses accountID (UUID) from Claims.AccountID,
+	//   never the prefix. The prefix is display-only.
 	//
 	// WHY human-readable prefix:
 	//   An operator looking at a token in a config file or environment variable can
@@ -233,7 +247,7 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label, zoneID,
 	//   The readable prefix itself contains dots (dns-he-net. and {account}.{role}).
 	//   Using "." as the separator would break the existing SplitN(token, ".", 2) logic
 	//   used to strip the JTI from the JWT. "--" is safe because:
-	//     - Account IDs use alphanumeric + single hyphens (never double)
+	//     - Account names use alphanumeric + single hyphens (never double)
 	//     - Role values are "admin" or "viewer" (no hyphens at all)
 	//     - UUID v4 uses single hyphens between segments (never double)
 	//     - The JWT base64url alphabet contains no hyphens at all
@@ -254,7 +268,7 @@ func IssueToken(ctx context.Context, db *sql.DB, accountID, role, label, zoneID,
 	//
 	// HASH covers the full prefixed token (not just the JWT):
 	//   Both issuance (here) and validation (ValidateToken) hash the same full string.
-	prefix := "dns-he-net." + accountID + "."
+	prefix := "dns-he-net." + accountName + "."
 	if zoneName != "" {
 		prefix += zoneName + "."
 	}

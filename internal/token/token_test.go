@@ -34,11 +34,14 @@ func openTestDB(t *testing.T) *sql.DB {
 }
 
 // insertTestAccount inserts a test account into the DB so foreign key constraints pass.
+// After migration 010, accounts have both an id (UUID) and a name (user-chosen label).
+// In tests, we use the same string for both id and name to keep assertion strings
+// (like "dns-he-net.acct-1.admin--") unchanged from before the migration.
 func insertTestAccount(t *testing.T, db *sql.DB, accountID string) {
 	t.Helper()
 	_, err := db.ExecContext(context.Background(),
-		`INSERT INTO accounts (id, username) VALUES (?, ?)`,
-		accountID, "test-user-"+accountID,
+		`INSERT INTO accounts (id, name, username) VALUES (?, ?, ?)`,
+		accountID, accountID, "test-user-"+accountID,
 	)
 	require.NoError(t, err, "failed to insert test account")
 }
@@ -53,10 +56,11 @@ func TestIssueToken_Success(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-1")
 
-	rawToken, jti, err := token.IssueToken(ctx, db, "acct-1", "admin", "my-label", "", "", 30, testSecret, nil)
+	rawToken, jti, err := token.IssueToken(ctx, db, "acct-1", "acct-1", "admin", "my-label", "", "", 30, testSecret, nil)
 	require.NoError(t, err)
 
-	// Token format: dns-he-net.{account}.{role}--{jti}.{jwt}
+	// Token format: dns-he-net.{accountName}.{role}--{jti}.{jwt}
+	// In tests, accountName == accountID ("acct-1"), so the prefix is unchanged.
 	assert.True(t, strings.HasPrefix(rawToken, "dns-he-net.acct-1.admin--"), "rawToken should start with readable prefix")
 	assert.True(t, strings.Contains(rawToken, "--"+jti+"."), "rawToken should contain the JTI after --")
 	assert.True(t, strings.Contains(rawToken, ".eyJ"), "rawToken should contain a JWT")
@@ -83,7 +87,7 @@ func TestIssueToken_InvalidRole(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-2")
 
-	_, _, err := token.IssueToken(ctx, db, "acct-2", "superadmin", "", "", "", 30, testSecret, nil)
+	_, _, err := token.IssueToken(ctx, db, "acct-2", "acct-2", "superadmin", "", "", "", 30, testSecret, nil)
 	assert.Error(t, err, "IssueToken should return error for invalid role")
 	assert.Contains(t, err.Error(), "invalid role")
 }
@@ -95,7 +99,7 @@ func TestValidateToken_Valid(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-3")
 
-	rawToken, _, err := token.IssueToken(ctx, db, "acct-3", "viewer", "read-only", "", "", 30, testSecret, nil)
+	rawToken, _, err := token.IssueToken(ctx, db, "acct-3", "acct-3", "viewer", "read-only", "", "", 30, testSecret, nil)
 	require.NoError(t, err)
 
 	claims, err := token.ValidateToken(ctx, db, rawToken, testSecret)
@@ -112,7 +116,7 @@ func TestValidateToken_Revoked(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-4")
 
-	rawToken, jti, err := token.IssueToken(ctx, db, "acct-4", "admin", "", "", "", 30, testSecret, nil)
+	rawToken, jti, err := token.IssueToken(ctx, db, "acct-4", "acct-4", "admin", "", "", "", 30, testSecret, nil)
 	require.NoError(t, err)
 
 	err = token.RevokeToken(ctx, db, "acct-4", jti)
@@ -183,7 +187,7 @@ func TestRevokeToken_Success(t *testing.T) {
 	ctx := context.Background()
 	insertTestAccount(t, db, "acct-7")
 
-	_, jti, err := token.IssueToken(ctx, db, "acct-7", "admin", "revoke-test", "", "", 30, testSecret, nil)
+	_, jti, err := token.IssueToken(ctx, db, "acct-7", "acct-7", "admin", "revoke-test", "", "", 30, testSecret, nil)
 	require.NoError(t, err)
 
 	err = token.RevokeToken(ctx, db, "acct-7", jti)
@@ -242,7 +246,7 @@ func TestListTokens(t *testing.T) {
 	require.NoError(t, err)
 
 	// Issue the "newer" token via IssueToken — created_at defaults to CURRENT_TIMESTAMP.
-	_, newJTI, err := token.IssueToken(ctx, db, "acct-9", "viewer", "second-token", "", "", 60, testSecret, nil)
+	_, newJTI, err := token.IssueToken(ctx, db, "acct-9", "acct-9", "viewer", "second-token", "", "", 60, testSecret, nil)
 	require.NoError(t, err)
 
 	records, err := token.ListTokens(ctx, db, "acct-9", false)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	playwright "github.com/playwright-community/playwright-go"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/vnovakov/dns-he-net-automation/internal/api/admin/templates"
@@ -313,12 +314,14 @@ func listAccountsFromDB(r *http.Request, db *sql.DB, userID string) ([]model.Acc
 			//   The admin UI handler needs it to populate the struct for any display or
 			//   credential-update operations. Omitting it here would require a separate
 			//   query whenever the password is needed.
-			`SELECT id, username, password, created_at, updated_at FROM accounts ORDER BY created_at ASC`,
+			// WHY include name: after migration 010 the display label is in the name column.
+			//   The template renders acc.Name (user-chosen label) in the card header.
+			`SELECT id, name, username, password, created_at, updated_at FROM accounts ORDER BY created_at ASC`,
 		)
 	} else {
 		// Account User session — filter to only their own HE accounts.
 		rows, err = db.QueryContext(r.Context(),
-			`SELECT id, username, password, created_at, updated_at FROM accounts WHERE user_id = ? ORDER BY created_at ASC`,
+			`SELECT id, name, username, password, created_at, updated_at FROM accounts WHERE user_id = ? ORDER BY created_at ASC`,
 			userID,
 		)
 	}
@@ -330,7 +333,7 @@ func listAccountsFromDB(r *http.Request, db *sql.DB, userID string) ([]model.Acc
 	var accounts []model.Account
 	for rows.Next() {
 		var acc model.Account
-		if err := rows.Scan(&acc.ID, &acc.Username, &acc.Password, &acc.CreatedAt, &acc.UpdatedAt); err != nil {
+		if err := rows.Scan(&acc.ID, &acc.Name, &acc.Username, &acc.Password, &acc.CreatedAt, &acc.UpdatedAt); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, acc)
@@ -437,13 +440,15 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 			writeFormError("Bad request: could not parse form.")
 			return
 		}
-		accountID := strings.TrimSpace(r.FormValue("account_id"))
+		// account_name: user-chosen label (was "account_id" before migration 010).
+		// The actual account ID (UUID) is generated server-side below — never from the form.
+		accountName := strings.TrimSpace(r.FormValue("account_name"))
 		username := strings.TrimSpace(r.FormValue("username"))
 		// WHY not trimming password: leading/trailing spaces in passwords are intentional.
 		// Trimming would silently store a different credential than what the operator typed.
 		password := r.FormValue("password")
-		if accountID == "" || username == "" {
-			writeFormError("Account ID and username are both required.")
+		if accountName == "" || username == "" {
+			writeFormError("Account name and username are both required.")
 			return
 		}
 		if password == "" {
@@ -451,7 +456,14 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// SECURITY (SEC-03): password is never logged — only the accountID appears in errors.
+		// Generate a UUID for the new account.
+		// WHY server-generated (not form-submitted):
+		//   UUIDs are globally unique — clients cannot predict or collide with other accounts.
+		//   The user-chosen name (accountName) is the human label; the UUID is the stable
+		//   internal identifier used in all FK references and JWT claims.
+		id := uuid.New().String()
+
+		// SECURITY (SEC-03): password is never logged — only the account name appears in errors.
 		//
 		// WHY user_id from session (not a form field):
 		//   Accepting user_id from the form would allow any authenticated user to create accounts
@@ -466,16 +478,16 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 			userIDVal = userID
 		} // else nil → NULL in SQLite
 		_, err := db.ExecContext(r.Context(),
-			`INSERT INTO accounts (id, username, password, user_id) VALUES (?, ?, ?, ?)`,
-			accountID, username, password, userIDVal,
+			`INSERT INTO accounts (id, name, username, password, user_id) VALUES (?, ?, ?, ?, ?)`,
+			id, accountName, username, password, userIDVal,
 		)
 		if err != nil {
 			errStr := err.Error()
-			// Provide human-readable messages for the most common constraint violation.
-			// username no longer has a UNIQUE constraint (removed in migration 004) —
-			// only the PRIMARY KEY (id) can cause a UNIQUE/PK conflict here.
+			// idx_accounts_user_name is UNIQUE(COALESCE(user_id,''), name).
+			// This fires when the same user (or admin) tries to register a second account
+			// with the same name. The message uses accountName (not the UUID) for clarity.
 			if strings.Contains(errStr, "UNIQUE") || strings.Contains(errStr, "PRIMARY KEY") {
-				writeFormError(fmt.Sprintf("Account ID %q is already registered.", accountID))
+				writeFormError(fmt.Sprintf("Account name %q is already registered for this user.", accountName))
 			} else {
 				writeFormError("Failed to create account: " + errStr)
 			}
@@ -485,9 +497,9 @@ func handleAccountCreate(db *sql.DB) http.HandlerFunc {
 		// Fetch the DB-assigned created_at and updated_at for the template.
 		var acc model.Account
 		err = db.QueryRowContext(r.Context(),
-			`SELECT id, username, created_at, updated_at FROM accounts WHERE id = ?`,
-			accountID,
-		).Scan(&acc.ID, &acc.Username, &acc.CreatedAt, &acc.UpdatedAt)
+			`SELECT id, name, username, created_at, updated_at FROM accounts WHERE id = ?`,
+			id,
+		).Scan(&acc.ID, &acc.Name, &acc.Username, &acc.CreatedAt, &acc.UpdatedAt)
 		if err != nil {
 			writeFormError("Account was created but could not be retrieved — reload the page.")
 			return
@@ -607,7 +619,21 @@ func handleTokenIssue(db *sql.DB, jwtSecret []byte, recoveryKey *[32]byte) http.
 			}
 		}
 
-		rawJWT, jti, err := token.IssueToken(r.Context(), db, accountID, role, label, zoneID, zoneName, 0, jwtSecret, recoveryKey)
+		// Look up account name for the human-readable token prefix.
+		// WHY look up here (not use accountID/UUID in prefix):
+		//   After migration 010, accountID is a UUID. Embedding the UUID would produce
+		//   unreadable prefixes like "dns-he-net.a3f9b2c1....admin--...". The name
+		//   (e.g. "primary") makes the prefix human-meaningful.
+		//   Non-fatal: fallback to accountID if lookup fails — token is still valid.
+		var accountName string
+		_ = db.QueryRowContext(r.Context(),
+			`SELECT name FROM accounts WHERE id = ?`, accountID,
+		).Scan(&accountName)
+		if accountName == "" {
+			accountName = accountID
+		}
+
+		rawJWT, jti, err := token.IssueToken(r.Context(), db, accountID, accountName, role, label, zoneID, zoneName, 0, jwtSecret, recoveryKey)
 		if err != nil {
 			http.Error(w, "Failed to issue token: "+err.Error(), http.StatusInternalServerError)
 			return

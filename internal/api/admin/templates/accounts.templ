@@ -28,7 +28,7 @@ templ AccountsPage(accounts []model.Account, zonesByAccount map[string][]model.Z
 		</div>
 		<div class="card" style="margin-top:1rem;">
 			<h3>Register Account</h3>
-			<p class="text-muted">Account ID is an internal label (e.g. "primary"). Username and password are your dns.he.net login credentials.</p>
+			<p class="text-muted">Account Name is a label you choose (e.g. "primary"). Username and password are your dns.he.net login credentials.</p>
 			<div id="account-register-error" style="margin-bottom:0.5rem;"></div>
 			<form
 				hx-post="/admin/accounts"
@@ -37,8 +37,8 @@ templ AccountsPage(accounts []model.Account, zonesByAccount map[string][]model.Z
 				hx-on::after-request="this.reset()">
 				<div class="form-row">
 					<div class="form-group">
-						<label for="account_id">Account ID</label>
-						<input type="text" id="account_id" name="account_id" placeholder="e.g. primary" required/>
+						<label for="account_name">Account Name</label>
+						<input type="text" id="account_name" name="account_name" placeholder="e.g. primary" required/>
 					</div>
 					<div class="form-group">
 						<label for="username">HE Username</label>
@@ -102,7 +102,13 @@ templ AccountCard(acc model.Account, zones []model.Zone) {
 	<div class="card" style="margin-bottom:1rem;">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
 			<div>
-				<h3 style="margin:0;">{ acc.ID } <span class="text-muted" style="font-size:0.9em;">({ acc.Username })</span></h3>
+				// WHY acc.Name (not acc.ID) in header:
+				//   After migration 010, acc.ID is a UUID (e.g. "a3f9b2c1-..."). Displaying the
+				//   UUID as the card title would be opaque and unreadable. acc.Name is the
+				//   operator-chosen label (e.g. "primary") which is meaningful at a glance.
+				//   acc.ID (UUID) is still used for all URL paths and htmx targets below —
+				//   it is the stable internal key, while acc.Name is display-only.
+				<h3 style="margin:0;">{ acc.Name } <span class="text-muted" style="font-size:0.9em;">({ acc.Username })</span></h3>
 				<small class="text-muted">Registered { acc.CreatedAt.Format("2006-01-02") }</small>
 			</div>
 			<div style="display:flex;gap:0.5rem;align-items:center;">
@@ -121,7 +127,7 @@ templ AccountCard(acc model.Account, zones []model.Zone) {
 					hx-delete={ "/admin/accounts/" + acc.ID }
 					hx-target="closest .card"
 					hx-swap="outerHTML swap:500ms"
-					hx-confirm={ "Remove account '" + acc.ID + "' and all its zones and tokens?" }>
+					hx-confirm={ "Remove account '" + acc.Name + "' and all its zones and tokens?" }>
 					Remove
 				</button>
 			</div>

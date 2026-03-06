@@ -35,10 +35,17 @@ const (
 // SECURITY (SEC-03):
 //   Password is stored in SQLite (0600 permissions) as of migration 005.
 //   It is tagged json:"-" so it is NEVER serialized into REST API responses.
-//   The REST API returns only id, username, created_at — password stays server-side.
+//   The REST API returns only id, name, username, created_at — password stays server-side.
 //   For higher-security deployments use the Vault credential provider instead.
+//
+// ID vs Name (migration 010):
+//   ID is a UUID (globally unique, stable, used in JWT claims and FK references).
+//   Name is the user-chosen label (e.g. "primary"), unique per user via a partial index.
+//   The REST API and admin UI URLs use ID (UUID). Name is displayed in the UI and
+//   embedded in the human-readable token prefix.
 type Account struct {
 	ID        string    `json:"id"`
+	Name      string    `json:"name"`      // user-chosen label; unique per user (migration 010)
 	Username  string    `json:"username"`
 	Password  string    `json:"-"` // Never in API responses; used by DBProvider and admin UI
 	CreatedAt time.Time `json:"created_at"`
