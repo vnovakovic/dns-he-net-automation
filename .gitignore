@@ -50,8 +50,15 @@ dnshenet-server.exe~
 screenshots.exe
 
 CLAUDE.md
+<<<<<<< Updated upstream
 /.gitlab
 .gitlab-ci.yml
 /.gitlabi/ci
 /.planning
 
+=======
+/.gitlab/ci
+.gitlab-ci.yml
+/.gitlab-ci
+/.planning
+>>>>>>> Stashed changes
