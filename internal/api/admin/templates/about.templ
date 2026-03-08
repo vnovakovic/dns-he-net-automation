@@ -1,0 +1,17 @@
+package templates
+
+// AboutPage renders the About / documentation page.
+// htmlContent is the goldmark-rendered HTML of static/about.md with {{VERSION}} already
+// substituted. Using templ.Raw() is safe here because the source is embedded in the binary
+// (not user-supplied) and goldmark sanitises its own output.
+//
+// WHY markdown → server-side HTML (not a static HTML page):
+//   Keeping docs in about.md makes them easy to edit without touching Go or templ files.
+//   The markdown is embedded at compile time so the binary remains self-contained.
+templ AboutPage(htmlContent string, data PageData) {
+	@Layout(data) {
+		<div class="about-content">
+			@templ.Raw(htmlContent)
+		</div>
+	}
+}

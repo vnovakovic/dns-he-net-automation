@@ -1,0 +1,309 @@
+package templates
+
+import "github.com/vnovakov/dns-he-net-automation/internal/model"
+
+// AccountsPage renders the full accounts management page.
+// Each account is a card with nested zones loaded from the DB.
+//
+// WHY cards instead of a flat table:
+//   Account now carries credentials (username + password) and owns a list of zones.
+//   A card layout makes the account→zones hierarchy visually explicit. A flat table
+//   cannot show nested zones without additional disclosure widgets.
+//
+// WHY zonesByAccount pre-populated from DB (not live-fetched on page load):
+//   Live-fetching requires a Playwright browser session per account — too expensive
+//   for a page load. Zones are stored in the DB after "Load zones from HE" and
+//   served directly. The "Load zones from HE" button triggers a browser session
+//   only when the operator explicitly requests it.
+templ AccountsPage(accounts []model.Account, zonesByAccount map[string][]model.Zone, data PageData) {
+	@Layout(data) {
+		<div class="page-header">
+			<h2>Accounts</h2>
+			<p class="text-muted">Each account stores dns.he.net credentials. Zones are fetched on demand and cached here for use by the API.</p>
+		</div>
+		<div id="accounts-cards">
+			for _, acc := range accounts {
+				@AccountCard(acc, zonesByAccount[acc.ID])
+			}
+		</div>
+		<div class="card" style="margin-top:1rem;">
+			<h3>Register Account</h3>
+			<p class="text-muted">Account Name is a label you choose (e.g. "primary"). Username and password are your dns.he.net login credentials.</p>
+			<div id="account-register-error" style="margin-bottom:0.5rem;"></div>
+			<form
+				hx-post="/admin/accounts"
+				hx-target="#accounts-cards"
+				hx-swap="beforeend"
+				hx-on::after-request="this.reset()">
+				<div class="form-row">
+					<div class="form-group">
+						<label for="account_name">Account Name</label>
+						<input type="text" id="account_name" name="account_name" placeholder="e.g. primary" required/>
+					</div>
+					<div class="form-group">
+						<label for="username">HE Username</label>
+						<input type="text" id="username" name="username" placeholder="your@email.com" required/>
+					</div>
+					<div class="form-group">
+						<label for="password">HE Password</label>
+						<div class="pw-field">
+							<input type="password" id="password" name="password" placeholder="dns.he.net password" required/>
+							@PwToggle()
+						</div>
+					</div>
+					<button type="submit" class="btn btn-primary">Register</button>
+				</div>
+			</form>
+		</div>
+		// Curl template dialog — rendered once per page, populated by showCurlTemplate() in admin.js.
+		// WHY <dialog>: native HTML modal — no JS framework needed, keyboard-accessible (ESC closes).
+		// WHY token input persists: <dialog> stays in DOM between showModal() calls, so the
+		//   token value typed once is reused for all subsequent template button clicks.
+		// WHY token input is in the dialog (not the page): keeps the token scoped to this
+		//   session view and avoids cluttering the accounts card layout.
+		<dialog id="curl-dialog" class="curl-dialog">
+			<div class="curl-dialog-header">
+				<span>curl template — <strong id="curl-dialog-label"></strong></span>
+				<button class="btn btn-sm curl-dialog-close" onclick="document.getElementById('curl-dialog').close()">✕</button>
+			</div>
+			<div class="curl-dialog-token">
+				<label for="curl-token-input">API Token</label>
+				<input id="curl-token-input" type="text" placeholder="paste your bearer token here" spellcheck="false" autocomplete="off"/>
+			</div>
+			<div class="curl-tabs">
+				<button id="curl-tab-bash" class="curl-tab curl-tab-active" onclick="setCurlTab('bash')">bash</button>
+				<button id="curl-tab-cmd" class="curl-tab" onclick="setCurlTab('cmd')">cmd</button>
+				<button id="curl-tab-ps" class="curl-tab" onclick="setCurlTab('ps')">PowerShell</button>
+			</div>
+			<pre id="curl-dialog-cmd" class="curl-cmd"></pre>
+			<div class="curl-dialog-footer">
+				<button id="curl-copy-btn" class="btn btn-primary btn-sm" onclick="copyCurlCmd()">Copy</button>
+				<button class="btn btn-sm" onclick="document.getElementById('curl-dialog').close()">Close</button>
+			</div>
+		</dialog>
+	}
+}
+
+// AccountCard renders a single account as a card with nested zones.
+// Used for full-page render inside AccountsPage and as the htmx partial
+// returned on successful account registration (appended to #accounts-cards).
+//
+// WHY hx-target="closest .card" for Remove (not a CSS id selector):
+//   Account IDs may contain dots (e.g. "eyodwa.org"), which are valid in HTML id
+//   attributes but break CSS id selectors — "#account-eyodwa.org" is parsed as
+//   "element with id=account-eyodwa AND class=org". Using "closest .card" avoids
+//   this by targeting the nearest ancestor .card element without any id dependency.
+//
+// WHY sanitizeHTMLID for the zones container id/hx-target:
+//   Same dot-in-CSS-selector issue. The zones div id uses sanitized ID ("eyodwa-org")
+//   so that "#account-zones-eyodwa-org" is a valid CSS selector. The original
+//   account ID (with dots) is still used for all URL paths and DB queries.
+templ AccountCard(acc model.Account, zones []model.Zone) {
+	<div class="card" style="margin-bottom:1rem;">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+			<div>
+				// WHY acc.Name (not acc.ID) in header:
+				//   After migration 010, acc.ID is a UUID (e.g. "a3f9b2c1-..."). Displaying the
+				//   UUID as the card title would be opaque and unreadable. acc.Name is the
+				//   operator-chosen label (e.g. "primary") which is meaningful at a glance.
+				//   acc.ID (UUID) is still used for all URL paths and htmx targets below —
+				//   it is the stable internal key, while acc.Name is display-only.
+				<h3 style="margin:0;">{ acc.Name } <span class="text-muted" style="font-size:0.9em;">({ acc.Username })</span></h3>
+				<small class="text-muted">Registered { acc.CreatedAt.Format("2006-01-02") }</small>
+			</div>
+			<div style="display:flex;gap:0.5rem;align-items:center;">
+				<button
+					class="btn btn-primary btn-sm"
+					hx-get={ "/admin/accounts/" + acc.ID + "/load-zones" }
+					hx-target={ "#account-zones-" + sanitizeHTMLID(acc.ID) }
+					hx-swap="innerHTML"
+					hx-indicator={ "#zones-spinner-" + sanitizeHTMLID(acc.ID) }
+					hx-on::after-request="this.closest('.card').querySelector('details').setAttribute('open','')">
+					Load zones from HE
+				</button>
+				<span id={ "zones-spinner-" + sanitizeHTMLID(acc.ID) } class="htmx-indicator text-muted">Loading...</span>
+				<button
+					class="btn btn-danger btn-sm"
+					hx-delete={ "/admin/accounts/" + acc.ID }
+					hx-target="closest .card"
+					hx-swap="outerHTML swap:500ms"
+					hx-confirm={ "Remove account '" + acc.Name + "' and all its zones and tokens?" }>
+					Remove
+				</button>
+			</div>
+		</div>
+		// WHY <details class="zones-collapsible"> (no open): zones start collapsed on page load
+		//   to keep the page compact. The "Load zones from HE" button sets open via
+		//   hx-on::after-request so the list expands automatically after fetch.
+		//   The id stays on the inner div so htmx hx-target still resolves correctly.
+		// DEPENDENCY: .zones-collapsible and .zones-summary CSS must be present in admin.css.
+		<details class="zones-collapsible">
+			<summary class="zones-summary">Zones</summary>
+			<div id={ "account-zones-" + sanitizeHTMLID(acc.ID) } style="margin-top:0.5rem;">
+				@AccountZonesList(acc.ID, zones)
+			</div>
+		</details>
+	</div>
+}
+
+// AccountZonesList renders the zones sub-list for one account.
+// Used on page load (from DB via AccountCard) and as the htmx partial
+// returned by GET /admin/accounts/{accountID}/load-zones.
+//
+// WHY hx-target="closest tr" for Remove zone (not a CSS id selector):
+//   Zone names can contain dots (same dot-in-CSS issue as account IDs).
+//   "closest tr" targets the enclosing table row without any id dependency.
+templ AccountZonesList(accountID string, zones []model.Zone) {
+	if len(zones) == 0 {
+		<p class="text-muted" style="margin:0;">No zones loaded. Click "Load zones from HE" to fetch the zone list from dns.he.net.</p>
+	} else {
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th>Zone Name</th>
+					<th>HE Zone ID</th>
+					<th>Templates</th>
+					<th>Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, z := range zones {
+					<tr>
+						<td>{ z.Name }</td>
+						<td>
+							if z.ID != "" {
+								<code>{ z.ID }</code>
+							} else {
+								<span class="text-muted">—</span>
+							}
+						</td>
+						<td>
+							// WHY template buttons only when z.ID != "":
+							//   The curl command URL requires the numeric HE zone ID.
+							//   Zones added without one cannot use the API until "Load zones from HE" populates it.
+							if z.ID != "" {
+								<div class="tpl-section">
+								<div class="tpl-row tpl-row-first">
+									<span class="tpl-method-label tpl-method-get">GET</span>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="GET" onclick="showCurlTemplate(this)" title="GET A records">A</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="GET" data-dynamic="true" onclick="showCurlTemplate(this)" title="GET A records (dynamic)">A+</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="AAAA" data-method="GET" onclick="showCurlTemplate(this)" title="GET AAAA records">AAAA</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="CNAME" data-method="GET" onclick="showCurlTemplate(this)" title="GET CNAME records">CNAME</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="TXT" data-method="GET" onclick="showCurlTemplate(this)" title="GET TXT records">TXT</button>
+								</div>
+								<div class="tpl-row">
+									<span class="tpl-method-label tpl-method-post">POST</span>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="POST" onclick="showCurlTemplate(this)" title="A record">A</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="POST" data-dynamic="true" onclick="showCurlTemplate(this)" title="A record with Dynamic DDNS">A+</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="AAAA" data-method="POST" onclick="showCurlTemplate(this)" title="AAAA record">AAAA</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="CNAME" data-method="POST" onclick="showCurlTemplate(this)" title="CNAME record">CNAME</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="TXT" data-method="POST" onclick="showCurlTemplate(this)" title="TXT record">TXT</button>
+								</div>
+								<div class="tpl-row">
+									<span class="tpl-method-label tpl-method-delete">DELETE</span>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="DELETE" onclick="showCurlTemplate(this)" title="DELETE A record">A</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="A" data-method="DELETE" data-dynamic="true" onclick="showCurlTemplate(this)" title="DELETE A record (dynamic)">A+</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="AAAA" data-method="DELETE" onclick="showCurlTemplate(this)" title="DELETE AAAA record">AAAA</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="CNAME" data-method="DELETE" onclick="showCurlTemplate(this)" title="DELETE CNAME record">CNAME</button>
+									<button class="btn btn-sm tpl-btn" data-zone={ z.Name } data-zone-id={ z.ID } data-type="TXT" data-method="DELETE" onclick="showCurlTemplate(this)" title="DELETE TXT record">TXT</button>
+								</div>
+								</div>
+							} else {
+								<span class="text-muted text-sm">Load zones from HE to enable</span>
+							}
+						</td>
+						<td>
+							<button
+								class="btn btn-danger btn-sm"
+								hx-delete={ "/admin/accounts/" + accountID + "/zones/" + z.Name }
+								hx-target="closest tr"
+								hx-swap="outerHTML swap:500ms"
+								hx-confirm={ "Remove zone '" + z.Name + "' from account '" + accountID + "'?" }>
+								Remove
+							</button>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
+}
+
+// AccountRegisterSuccess is the htmx partial returned on successful account registration.
+// Appended to #accounts-cards by htmx and clears the error div via OOB swap.
+//
+// WHY hx-swap-oob on error div:
+//   If a previous failed registration left an error in #account-register-error,
+//   this OOB swap replaces it with an empty div without a page reload.
+templ AccountRegisterSuccess(acc model.Account) {
+	@AccountCard(acc, nil)
+	<div id="account-register-error" hx-swap-oob="true"></div>
+}
+
+// AccountRegisterError renders an error message for #account-register-error.
+// Delivered via HX-Retarget header when registration fails — see handleAccountCreate.
+//
+// WHY HX-Retarget (not http.Error):
+//   http.Error returns 4xx/5xx which htmx swallows silently — the form resets but
+//   no error is shown. Retargeting to the error div with status 200 makes htmx
+//   actually perform the swap and the error becomes visible to the operator.
+templ AccountRegisterError(msg string) {
+	<p class="error-banner" style="margin:0;">{ msg }</p>
+}
+
+// AccountZonesSelectList renders the post-load zone selection form.
+// Returned by GET /admin/accounts/{accountID}/load-zones after fetching zones from HE.
+// The operator unchecks unwanted zones and clicks "Store selected" to persist only those.
+//
+// WHY two-step (load → select → store) instead of auto-upsert:
+//   Operators managing accounts with many zones (test domains, delegated subdomains) do not
+//   want all zones auto-imported. The selection step lets them keep only what they manage.
+//
+// WHY checkbox value encodes "name|heZoneID":
+//   The form needs both the zone name and HE numeric zone ID per selected zone.
+//   Encoding both in one checkbox value (split on "|") avoids hidden-field sync issues.
+//   Domain names and numeric IDs never contain "|", making this delimiter safe.
+//
+// WHY hx-target uses the same "#account-zones-<id>" div (inside <details>):
+//   The <details> wrapper in AccountCard keeps the id on the inner div, not on <details>
+//   itself. htmx replaces innerHTML of that div — the <details> open/close state is
+//   unaffected. After "Store selected" the div is replaced with AccountZonesList.
+templ AccountZonesSelectList(accountID string, zones []model.Zone) {
+	if len(zones) == 0 {
+		<p class="text-muted" style="margin:0;">All zones from dns.he.net are already stored in the local database. Nothing new to add.</p>
+	} else {
+		<form
+			hx-post={ "/admin/accounts/" + accountID + "/zones/store" }
+			hx-target={ "#account-zones-" + sanitizeHTMLID(accountID) }
+			hx-swap="innerHTML">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th style="width:2rem;"></th>
+						<th>Zone Name</th>
+						<th>HE Zone ID</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, z := range zones {
+						<tr>
+							<td><input type="checkbox" name="zone" value={ z.Name + "|" + z.ID }/></td>
+							<td>{ z.Name }</td>
+							<td>
+								if z.ID != "" {
+									<code>{ z.ID }</code>
+								} else {
+									<span class="text-muted">—</span>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			<div style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center;">
+				<button type="submit" class="btn btn-primary btn-sm">Store selected</button>
+				<span class="text-muted text-sm">Check zones you want to store.</span>
+			</div>
+		</form>
+	}
+}

@@ -1,0 +1,177 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/vnovakov/dns-he-net-automation/internal/bindio"
+	"github.com/vnovakov/dns-he-net-automation/internal/model"
+)
+
+// ZonesPage renders the zones view, reading zones from the DB (not live-fetching).
+// Zones are populated by the "Load zones from HE" button on the Accounts page.
+//
+// WHY read from DB (not live-fetch on page load):
+//   Live-fetching requires a Playwright browser session per account. Doing this
+//   on every Zones page load is too expensive. The Accounts page provides the
+//   "Load zones from HE" button to fetch and persist zones into the DB; the
+//   Zones page then serves that cached data instantly.
+//
+// WHY per-account grouping (not a flat list):
+//   Export and Import operations require both zone ID (for browser automation)
+//   and account ID (for the browser session credential lookup). Grouping by
+//   account makes the ownership relationship explicit and co-locates all the
+//   information needed to construct the Export link.
+templ ZonesPage(accounts []model.Account, zonesByAccount map[string][]model.Zone, data PageData) {
+	@Layout(data) {
+		<div class="page-header">
+			<h2>Zones</h2>
+			<p class="text-muted">
+				Zones are loaded via the <a href="/admin/accounts">Accounts page</a>.
+				Export and import BIND zone files here (requires a dns.he.net browser session).
+			</p>
+		</div>
+		if len(accounts) == 0 {
+			<div class="card">
+				<p class="text-muted">No accounts registered. <a href="/admin/accounts">Go to Accounts</a> to register an account.</p>
+			</div>
+		}
+		for _, acc := range accounts {
+			@ZonesForAccount(acc.ID, acc.Name, acc.Username, zonesByAccount[acc.ID])
+		}
+	}
+}
+
+// ZonesForAccount renders a zone card for one account showing zones from DB.
+// Used only in ZonesPage for full-page render (not an htmx partial — load-zones
+// returns AccountZonesList, not this template).
+//
+// WHY show Export/Import only when he_zone_id is known (z.ID != ""):
+//   Export and Import use the HE numeric zone ID in the URL and in browser automation.
+//   A zone with an empty he_zone_id was manually registered or loaded before migration 005;
+//   its zone ID is unknown until the operator clicks "Load zones from HE" on the Accounts page.
+//
+// accountID = UUID (used in URLs/form fields); accountName = user-chosen label (displayed).
+// WHY separate params: after migration 010, the UUID is opaque to operators. The name
+// is the human-readable label they chose (e.g. "primary"). URLs keep the UUID as the
+// stable internal routing key — never replaced by the name.
+templ ZonesForAccount(accountID string, accountName string, username string, zones []model.Zone) {
+	<div class="card" style="margin-bottom:1rem;">
+		<h3>{ accountName } <span class="text-muted" style="font-size:0.9em;">({ username })</span></h3>
+		if len(zones) == 0 {
+			<p class="text-muted">No zones loaded for this account. Use the <a href="/admin/accounts">Accounts page</a> to load zones from dns.he.net.</p>
+		} else {
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Zone Name</th>
+						<th>HE Zone ID</th>
+						<th>Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, z := range zones {
+						<tr>
+							<td>{ z.Name }</td>
+							<td>
+								if z.ID != "" {
+									<code>{ z.ID }</code>
+								} else {
+									<span class="text-muted">Not loaded</span>
+								}
+							</td>
+							<td>
+								if z.ID != "" {
+									<div style="display:flex;gap:0.5rem;align-items:flex-start;flex-wrap:wrap;">
+										<a
+											href={ templ.SafeURL("/admin/zones/" + z.ID + "/export?account_id=" + accountID) }
+											class="btn btn-sm"
+											download={ z.Name + ".zone" }>
+											Export BIND
+										</a>
+										<details>
+											<summary class="btn btn-sm" style="cursor:pointer;list-style:none;display:inline-block;">Import BIND</summary>
+											@ZoneImportForm(accountID, z.ID, z.Name)
+										</details>
+									</div>
+									<div id={ "import-result-" + z.ID }></div>
+								} else {
+									<span class="text-muted">Load zones first (Accounts page)</span>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+// ZoneImportForm renders the BIND import textarea and submit button for a single zone.
+// The form is wrapped in a <details> element by ZonesForAccount so it collapses cleanly.
+//
+// WHY htmx target is outside the <details> (not inside the form):
+//   The result div (#import-result-{zoneID}) lives outside the <details> element,
+//   so the import result is visible even after the operator closes the form panel.
+//
+// WHY dry_run checked by default:
+//   Consistent with the Sync page — safe default is preview. Operators must uncheck
+//   to apply changes, preventing accidental DNS mutations on first use.
+templ ZoneImportForm(accountID, zoneID, zoneName string) {
+	<form
+		hx-post={ "/admin/zones/" + zoneID + "/import" }
+		hx-target={ "#import-result-" + zoneID }
+		hx-swap="innerHTML"
+		style="margin-top:0.5rem;min-width:28rem;">
+		<input type="hidden" name="account_id" value={ accountID }/>
+		<div class="form-group">
+			<label>BIND Zone File (additive only — existing records not in the file are kept)</label>
+			<textarea name="bind_zone" rows="8" placeholder={ "$ORIGIN " + zoneName + ".\n$TTL 3600\nwww A 1.2.3.4" }></textarea>
+		</div>
+		<div class="form-row">
+			<label class="checkbox-label">
+				<input type="checkbox" name="dry_run" value="true" checked/>
+				Dry run (preview only — no changes applied)
+			</label>
+			<button type="submit" class="btn btn-primary btn-sm">Import</button>
+		</div>
+	</form>
+}
+
+// ZoneImportResult renders the BIND import result as an htmx partial.
+// Inserted into #import-result-{zoneID} after POST /admin/zones/{zoneID}/import.
+//
+// WHY show a skipped records table (not just a count):
+//   CONTEXT.md decision: the import response must list which records were skipped
+//   and why (unsupported type, SOA, parse error) so operators know what was omitted.
+templ ZoneImportResult(zoneName string, dryRun bool, applied int, skipped []bindio.SkippedRecord, hadErrors bool) {
+	<div style="margin-top:0.75rem;padding:0.75rem;border:1px solid var(--border);border-radius:0.5rem;">
+		if hadErrors {
+			<div class="error-banner">Some records failed to import. Check the audit log for details.</div>
+		}
+		if dryRun {
+			<p>Dry run: <strong>{ fmt.Sprintf("%d", applied) } change(s)</strong> would be applied to <code>{ zoneName }</code>.</p>
+		} else {
+			<p>Import complete: <strong>{ fmt.Sprintf("%d", applied) } record(s)</strong> applied to <code>{ zoneName }</code>.</p>
+		}
+		if len(skipped) > 0 {
+			<p class="text-muted">{ fmt.Sprintf("%d", len(skipped)) } record(s) skipped (unsupported or SOA):</p>
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Type</th>
+						<th>Reason</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, s := range skipped {
+						<tr>
+							<td>{ s.Name }</td>
+							<td><code>{ s.Type }</code></td>
+							<td class="text-muted">{ s.Reason }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}

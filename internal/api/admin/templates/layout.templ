@@ -1,0 +1,112 @@
+package templates
+
+// PageData carries common data passed to every page component.
+// All admin page handlers populate this struct before calling templ components.
+//
+// WHY IsAdmin bool (not a role string):
+//   The only conditional in the UI is "show Users nav link or not". A bool is simpler
+//   and avoids stringly-typed role comparisons in templates.
+//
+// WHY Username + Role separate from IsAdmin:
+//   IsAdmin drives nav visibility; Username/Role drive the identity badge in the top bar.
+//   Keeping them separate avoids re-deriving one from the other inside templates.
+type PageData struct {
+	Title      string
+	ActivePage string // "accounts", "tokens", "zones", "sync", "audit", "users", "about"
+	IsAdmin    bool   // true for env-configured Server Admin; false for Account Users
+	Username   string // display name shown in top-bar identity badge
+	Role       string // "Admin" or "User" shown next to the username
+}
+
+// Layout is the base HTML template wrapping all admin pages.
+// Renders the sidebar, top bar header, and a content slot for child components.
+//
+// WHY children... slot (templ composition pattern):
+//   Avoids copy-pasting the sidebar/header HTML into every page component.
+//   templ guarantees type-safe composition at compile time (no text/template runtime errors).
+//
+// WHY <link> and <script> point to /admin/static/ (embedded, not CDN):
+//   The binary is self-contained — no internet dependency at runtime. Works in air-gapped
+//   environments. The go:embed in static.go serves these from the binary. (UI-05)
+templ Layout(data PageData) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ data.Title } | ES DNS Engine</title>
+			<link rel="icon" type="image/svg+xml" href="/admin/static/logo.svg"/>
+			<link rel="stylesheet" href="/admin/static/admin.css"/>
+			<script src="/admin/static/htmx.min.js" defer></script>
+			<script src="/admin/static/admin.js" defer></script>
+		</head>
+		<body class="app-shell">
+			<nav class="sidebar">
+				// WHY <img> for the logo (not inline SVG):
+				//   logo.svg is embedded in staticFS and served at /admin/static/logo.svg.
+				//   Using <img> keeps the templ file clean and lets the browser cache the asset.
+				//   The SVG is a dark-sidebar variant of .planning/es-storm-cell-white.svg with
+				//   text and accent colours adapted for the dark #18181b sidebar background.
+				<div class="sidebar-logo">
+					<img src="/admin/static/logo.svg" alt="Electric Storm — DNS Portal" style="width:100%;max-width:208px;display:block;"/>
+				</div>
+				@NavLink("/admin/accounts", "Accounts", data.ActivePage == "accounts")
+				@NavLink("/admin/tokens", "Tokens", data.ActivePage == "tokens")
+				@NavLink("/admin/zones", "Zones", data.ActivePage == "zones")
+				@NavLink("/admin/sync", "Sync", data.ActivePage == "sync")
+				@NavLink("/admin/audit", "Audit Log", data.ActivePage == "audit")
+				if data.IsAdmin {
+					@NavLink("/admin/users", "Users", data.ActivePage == "users")
+				}
+				@NavLink("/admin/about", "About", data.ActivePage == "about")
+				<div class="sidebar-footer">
+					<a href="/admin/logout" class="nav-link">Logout</a>
+				</div>
+			</nav>
+			<div class="page-wrapper">
+				<header class="top-bar">
+					<span class="top-bar-title">{ data.Title }</span>
+					if data.Username != "" {
+						<span class="top-bar-user">{ data.Username } <span class="top-bar-role">{ data.Role }</span></span>
+					}
+				</header>
+				<main class="main-content">
+					{ children... }
+				</main>
+			</div>
+		</body>
+	</html>
+}
+
+// PwToggle renders the show/hide eye button placed inside a .pw-field wrapper.
+//
+// WHY a shared component (not inlined in every template):
+//   The SVG eye icon is 200+ chars; repeating it across 12 password fields would bloat
+//   every template file. A single component keeps changes in one place.
+//
+// WHY initial state = eye-open (show icon):
+//   The input starts as type="password" (hidden), so the first action is "reveal" —
+//   the open eye communicates "click to see". JS togglePw() in admin.js swaps to the
+//   eye-off icon when the password is revealed.
+//
+// DEPENDENCY: admin.js must define window.togglePw — see togglePw() in admin.js.
+//   login.templ also loads admin.js so the toggle works on the login page too.
+templ PwToggle() {
+	<button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1" aria-label="Show password">
+		<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+			<circle cx="12" cy="12" r="3"></circle>
+		</svg>
+	</button>
+}
+
+// NavLink renders a sidebar navigation link with active state styling.
+// Separating active/inactive into two branches avoids a runtime conditional attribute
+// on class — templ prefers explicit branching for clarity and XSS safety.
+templ NavLink(href, label string, active bool) {
+	if active {
+		<a href={ templ.SafeURL(href) } class="nav-link nav-link-active">{ label }</a>
+	} else {
+		<a href={ templ.SafeURL(href) } class="nav-link">{ label }</a>
+	}
+}

@@ -1,0 +1,179 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakov/dns-he-net-automation/internal/reconcile"
+)
+
+// SyncPage renders the sync trigger form.
+//
+// WHY htmx (hx-post) for the form submission (not standard POST+redirect):
+//   The sync operation may take several seconds (browser automation required).
+//   htmx allows showing a loading indicator while the request runs and then
+//   replacing just the result div with the diff table — no full page reload.
+//
+// WHY dry_run is checked by default:
+//   The safe default is preview-only. Operators must explicitly uncheck "Dry run"
+//   to apply changes, which prevents accidental mutations on first use.
+//
+// WHY zoneID is a text input (not a select from the zones list):
+//   Populating the zones dropdown would require browser sessions per account on
+//   every page load. Operators can get zone IDs from GET /api/v1/zones response
+//   or the Zones page (which shows zone IDs from stored data where available).
+templ SyncPage(accounts []model.Account, data PageData) {
+	@Layout(data) {
+		<div class="page-header">
+			<h2>Zone Sync</h2>
+		</div>
+		<div class="card">
+			<p>Trigger a reconciliation sync for a zone. Paste the desired DNS records as JSON.</p>
+			<p class="text-muted" style="margin-top:0;">
+				This form is intended for programmatic/scripted use (e.g. Ansible, Terraform pipelines).
+				For BIND zone file import, use the <a href="/admin/zones">Zones page</a> — each zone has an "Import BIND" button.
+			</p>
+			<form
+				hx-post="/admin/sync/trigger"
+				hx-target="#sync-result"
+				hx-swap="innerHTML"
+				hx-indicator="#sync-spinner">
+				<div class="form-row">
+					<div class="form-group">
+						<label for="account_id">Account</label>
+						<select id="account_id" name="account_id" required>
+							<option value="">Select account...</option>
+							for _, acc := range accounts {
+								<option value={ acc.ID }>{ acc.ID } ({ acc.Username })</option>
+							}
+						</select>
+					</div>
+					<div class="form-group">
+						<label for="zone_id">Zone ID</label>
+						<input type="text" id="zone_id" name="zone_id" placeholder="zone ID from /api/v1/zones" required/>
+					</div>
+				</div>
+				<div class="form-group">
+					<label for="desired_records">Desired Records (JSON array)</label>
+					<textarea id="desired_records" name="desired_records" rows="10" placeholder="[]"></textarea>
+				</div>
+				<div class="form-row">
+					<label class="checkbox-label">
+						<input type="checkbox" name="dry_run" value="true" checked/>
+						Dry run (preview only — no changes applied)
+					</label>
+					<button type="submit" class="btn btn-primary">Run Sync</button>
+					<span id="sync-spinner" class="htmx-indicator">Running...</span>
+				</div>
+			</form>
+		</div>
+		<div id="sync-result"></div>
+	}
+}
+
+// SyncResultPartial renders the sync result as an htmx partial response.
+//
+// WHY show plan rows when len(results)==0 && dryRun:
+//   On a dry run, reconcile.Apply is not called — plan contains the diff and results
+//   is empty. The template must detect this combination and render the plan rows
+//   instead, so operators can see what would change.
+//
+// WHY ErrorMsg (not Error):
+//   reconcile.SyncResult.ErrorMsg is the correct field name. The plan template
+//   had r.Error but that field does not exist — auto-fixed to r.ErrorMsg.
+templ SyncResultPartial(zoneID string, dryRun bool, plan reconcile.SyncPlan, results []reconcile.SyncResult, hadErrors bool) {
+	<div class="card" style="margin-top:1rem;">
+		<h3>
+			if dryRun {
+				Dry Run Result — Zone { zoneID }
+			} else {
+				Sync Result — Zone { zoneID }
+			}
+		</h3>
+		if hadErrors {
+			<div class="error-banner">Some operations failed. See results below.</div>
+		}
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th>Operation</th>
+					<th>Type</th>
+					<th>Name</th>
+					<th>Status</th>
+					<th>Error</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, r := range results {
+					<tr>
+						<td>
+							<span class={ "badge " + opBadgeClass(r.Op) }>{ r.Op }</span>
+						</td>
+						<td>{ string(r.Record.Type) }</td>
+						<td>{ r.Record.Name }</td>
+						<td>
+							if r.Status == "ok" {
+								<span class="badge badge-success">ok</span>
+							} else {
+								<span class="badge badge-danger">error</span>
+							}
+						</td>
+						<td>{ r.ErrorMsg }</td>
+					</tr>
+				}
+				if len(results) == 0 && dryRun {
+					// Dry run — show the plan instead of results.
+					for _, rec := range plan.Add {
+						<tr>
+							<td><span class="badge badge-success">add</span></td>
+							<td>{ string(rec.Type) }</td>
+							<td>{ rec.Name }</td>
+							<td><span class="badge">planned</span></td>
+							<td></td>
+						</tr>
+					}
+					for _, rec := range plan.Update {
+						<tr>
+							<td><span class="badge badge-admin">update</span></td>
+							<td>{ string(rec.Type) }</td>
+							<td>{ rec.Name }</td>
+							<td><span class="badge">planned</span></td>
+							<td></td>
+						</tr>
+					}
+					for _, rec := range plan.Delete {
+						<tr>
+							<td><span class="badge badge-danger">delete</span></td>
+							<td>{ string(rec.Type) }</td>
+							<td>{ rec.Name }</td>
+							<td><span class="badge">planned</span></td>
+							<td></td>
+						</tr>
+					}
+					if len(plan.Add)+len(plan.Update)+len(plan.Delete) == 0 {
+						<tr>
+							<td colspan="5" class="text-muted" style="text-align:center;">
+								No changes — zone is already in desired state.
+							</td>
+						</tr>
+					}
+				}
+			</tbody>
+		</table>
+		<p class="text-muted" style="margin-top:0.5rem;">
+			{ fmt.Sprintf("Add: %d  Update: %d  Delete: %d", len(plan.Add), len(plan.Update), len(plan.Delete)) }
+		</p>
+	</div>
+}
+
+// opBadgeClass returns the CSS badge class for a sync operation type.
+// add=green (badge-success), delete=red (badge-danger), update=purple (badge-admin).
+func opBadgeClass(op string) string {
+	switch op {
+	case "add":
+		return "badge-success"
+	case "delete":
+		return "badge-danger"
+	default:
+		return "badge-admin"
+	}
+}

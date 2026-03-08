@@ -1,0 +1,56 @@
+package templates
+
+// LoginPage renders the admin login form.
+//
+// WHY plain HTML form POST (not htmx):
+//   Login must work before JS loads — if htmx fails to load (network issue, browser
+//   extension, etc.), the admin must still be able to authenticate. Plain form POST
+//   is the most resilient approach for a security-critical endpoint.
+//
+// WHY standalone HTML (not wrapped in Layout):
+//   Login page has no sidebar/header — those require an authenticated session.
+//   The .login-page body class triggers a separate layout in admin.css (centered card).
+//
+// WHY errorMsg as a parameter (not a cookie/flash):
+//   Avoids the complexity of a flash cookie system. POST /admin/login re-renders
+//   this template with the error string on failure, then redirects on success.
+//   Simple, stateless, no additional storage needed.
+//
+// WHY admin.js is loaded here (not just in Layout):
+//   Login page does not use Layout (no sidebar/header needed). admin.js is loaded
+//   explicitly so the PwToggle eye button works on the login page too.
+//   The form still submits without JS — admin.js is a progressive enhancement only.
+templ LoginPage(errorMsg string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>Login | DNS Admin</title>
+			<link rel="stylesheet" href="/admin/static/admin.css"/>
+			<script src="/admin/static/admin.js" defer></script>
+		</head>
+		<body class="login-page">
+			<div class="login-card card">
+				<h1>DNS Admin Login</h1>
+				if errorMsg != "" {
+					<div class="error-banner">{ errorMsg }</div>
+				}
+				<form method="POST" action="/admin/login">
+					<div class="form-group">
+						<label for="username">Username</label>
+						<input type="text" id="username" name="username" required autofocus/>
+					</div>
+					<div class="form-group">
+						<label for="password">Password</label>
+						<div class="pw-field">
+							<input type="password" id="password" name="password" required/>
+							@PwToggle()
+						</div>
+					</div>
+					<button type="submit" class="btn btn-primary">Sign In</button>
+				</form>
+			</div>
+		</body>
+	</html>
+}

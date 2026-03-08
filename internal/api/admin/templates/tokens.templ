@@ -1,0 +1,258 @@
+package templates
+
+import (
+	"github.com/vnovakov/dns-he-net-automation/internal/model"
+	"github.com/vnovakov/dns-he-net-automation/internal/token"
+)
+
+// zoneScopeStr returns a short display string for a token's zone scope.
+func zoneScopeStr(tok token.TokenRecord) string {
+	if tok.ZoneName != nil && *tok.ZoneName != "" {
+		return *tok.ZoneName
+	}
+	if tok.ZoneID != nil && *tok.ZoneID != "" {
+		return "zone:" + *tok.ZoneID
+	}
+	return "all zones"
+}
+
+// TokensPage renders the top-level tokens page: list of accounts,
+// each with a "List Tokens" button that expands token list via htmx.
+//
+// WHY lazy load per account (not all tokens on page load):
+//   An account can have many tokens. Loading all tokens for all accounts on initial
+//   page render would be slow for large deployments. htmx GET /admin/tokens/{accountID}
+//   loads tokens on demand — only when the operator expands an account's section.
+templ TokensPage(accounts []model.Account, data PageData) {
+	@Layout(data) {
+		<div class="page-header">
+			<h2>Tokens</h2>
+		</div>
+		for _, acc := range accounts {
+			<div class="card" style="margin-bottom:1rem;">
+				<div class="card-header">
+					// WHY acc.Name (not acc.ID): after migration 010, acc.ID is a UUID — opaque
+					// to the operator. acc.Name is the human-chosen label (e.g. "primary").
+					// htmx URLs and div IDs keep acc.ID (UUID) as the stable routing key.
+					<strong>{ acc.Name }</strong>
+					<span class="text-muted">({ acc.Username })</span>
+					<button
+						class="btn btn-sm"
+						hx-get={ "/admin/tokens/" + acc.ID }
+						hx-target={ "#tokens-" + acc.ID }
+						hx-swap="innerHTML">
+						List Tokens
+					</button>
+				</div>
+				<div id={ "tokens-" + acc.ID }>
+					<!-- Tokens loaded on demand via htmx -->
+				</div>
+			</div>
+		}
+		// Reveal dialog — shared across all token rows, populated by showRevealDialog() in admin.js.
+		// WHY <dialog>: native modal with ESC support, no JS framework needed (same pattern as curl-dialog).
+		// DEPENDENCY: TOKEN_RECOVERY_ENABLED must be true for the Show button to appear (see TokenRow).
+		//   When the feature is disabled, this dialog is still rendered but is never opened.
+		<dialog id="reveal-dialog" class="curl-dialog">
+			<div class="curl-dialog-header">
+				<span>Reveal token — <strong id="reveal-dialog-label"></strong></span>
+				<button class="btn btn-sm curl-dialog-close" onclick="document.getElementById('reveal-dialog').close()">&#x2715;</button>
+			</div>
+			<div class="curl-dialog-token">
+				<label for="reveal-password">Portal password</label>
+				<div class="pw-field" style="flex:1;">
+					<input id="reveal-password" type="password" placeholder="your admin / account password" autocomplete="current-password"/>
+					@PwToggle()
+				</div>
+			</div>
+			<div style="padding:0 1rem 0.75rem;">
+				<button class="btn btn-primary btn-sm" onclick="submitReveal()">Reveal token</button>
+				<span id="reveal-error" class="error-banner" style="margin-left:0.5rem;display:none;"></span>
+			</div>
+			// WHY input[type=password] + eye toggle (not a <pre>):
+			//   Showing the token as plain text is a shoulder-surfing / screenshot risk.
+			//   A password input masks the value with bullets so bystanders cannot read it.
+			//   The eye toggle lets the operator reveal it deliberately, same UX as all other
+			//   password fields in the admin UI. Copy still works on the masked value because
+			//   clipboard.writeText reads input.value, not the rendered bullet characters.
+			<div id="reveal-token-wrapper" style="display:none;padding:0 1rem 0.75rem;">
+				<div class="pw-field">
+					<input
+						id="reveal-token-value"
+						type="password"
+						readonly
+						autocomplete="off"
+						spellcheck="false"
+						style="font-family:monospace;font-size:0.82em;letter-spacing:0.02em;"/>
+					@PwToggle()
+				</div>
+			</div>
+			<div class="curl-dialog-footer">
+				<button id="reveal-copy-btn" class="btn btn-primary btn-sm" style="display:none;" onclick="copyRevealToken()">Copy</button>
+				<button class="btn btn-sm" onclick="document.getElementById('reveal-dialog').close()">Close</button>
+			</div>
+		</dialog>
+	}
+}
+
+// TokensForAccount renders the token list for a single account.
+// Used as the htmx partial response for "List Tokens" button (GET /admin/tokens/{accountID}).
+// zones is the list of zones for this account, used to populate the zone dropdown in IssueTokenForm.
+templ TokensForAccount(accountID string, tokens []token.TokenRecord, zones []model.Zone) {
+	<table class="data-table" style="margin-top:0.75rem;">
+		<thead>
+			<tr>
+				<th>ID</th>
+				<th>Label</th>
+				<th>Role</th>
+				<th>Zone scope</th>
+				<th>Created</th>
+				<th>Expires</th>
+				<th>Status</th>
+				<th>Actions</th>
+			</tr>
+		</thead>
+		<tbody id={ "token-rows-" + accountID }>
+			for _, tok := range tokens {
+				@TokenRow(tok)
+			}
+		</tbody>
+	</table>
+	<div style="margin-top:0.75rem;">
+		@IssueTokenForm(accountID, zones)
+	</div>
+}
+
+// TokenRow renders a single token row.
+// Used both for full-table render and as htmx response for new token issuance.
+templ TokenRow(tok token.TokenRecord) {
+	<tr id={ "token-row-" + tok.JTI }>
+		<td><code>{ tok.JTI[:8] }...</code></td>
+		<td>{ labelOrDash(tok.Label) }</td>
+		<td>
+			if tok.Role == "admin" {
+				<span class="badge badge-admin">admin</span>
+			} else {
+				<span class="badge">viewer</span>
+			}
+		</td>
+		<td>
+			if tok.ZoneName != nil && *tok.ZoneName != "" {
+				<span class="badge">{ *tok.ZoneName }</span>
+			} else if tok.ZoneID != nil && *tok.ZoneID != "" {
+				<span class="badge">zone:{ *tok.ZoneID }</span>
+			} else {
+				<span class="text-muted">all zones</span>
+			}
+		</td>
+		<td>{ tok.CreatedAt.Format("2006-01-02") }</td>
+		<td>{ expiresStr(tok) }</td>
+		<td>
+			if tok.RevokedAt != nil {
+				<span class="badge badge-danger">revoked</span>
+			} else {
+				<span class="badge badge-success">active</span>
+			}
+		</td>
+		<td style="display:flex;gap:0.35rem;flex-wrap:wrap;">
+			if tok.RevokedAt == nil {
+				<button
+					class="btn btn-danger btn-sm"
+					hx-delete={ "/admin/tokens/" + tok.JTI }
+					hx-target={ "#token-row-" + tok.JTI }
+					hx-swap="outerHTML swap:500ms"
+					hx-confirm="Revoke this token? It will be immediately rejected on the next request.">
+					Revoke
+				</button>
+			}
+			if tok.Recoverable && tok.RevokedAt == nil {
+				// WHY Recoverable check: Show button only appears when TOKEN_RECOVERY_ENABLED=true
+				//   AND the token has an encrypted value in the DB (it was issued while the feature
+				//   was on). Tokens issued before the feature was enabled show no button.
+				<button
+					class="btn btn-sm"
+					data-jti={ tok.JTI }
+					onclick="showRevealDialog(this.dataset.jti)">
+					Show
+				</button>
+			}
+		</td>
+	</tr>
+}
+
+// IssueTokenForm renders the inline form for issuing a new token under an account section.
+// zones is the list of zones for this account — populates the zone scope dropdown.
+// Selecting a zone issues a zone-scoped token; "All zones" issues an account-wide token.
+//
+// WHY zone_id only in the select (no separate zone_name hidden input):
+//   The select value is the zone_id (numeric HE ID). The handler looks up the zone_name
+//   from the DB using zone_id + account_id, so no client-side JS is needed to keep two
+//   fields in sync. This is simpler and avoids any JS quirks with templ event attributes.
+templ IssueTokenForm(accountID string, zones []model.Zone) {
+	<form
+		hx-post={ "/admin/tokens/" + accountID }
+		hx-target={ "#token-rows-" + accountID }
+		hx-swap="beforeend">
+		<div class="form-row">
+			<div class="form-group">
+				<label>Label</label>
+				<input type="text" name="label" placeholder="e.g. ansible-prod"/>
+			</div>
+			<div class="form-group">
+				<label>Role</label>
+				<select name="role">
+					<option value="viewer">viewer</option>
+					<option value="admin">admin</option>
+				</select>
+			</div>
+			if len(zones) > 0 {
+				<div class="form-group">
+					<label>Zone scope</label>
+					// zone_id select: empty value = account-wide token; non-empty = zone-scoped.
+					// Handler looks up zone_name from DB using zone_id.
+					<select name="zone_id">
+						<option value="">All zones</option>
+						for _, z := range zones {
+							<option value={ z.ID }>{ z.Name }</option>
+						}
+					</select>
+				</div>
+			}
+			<button type="submit" class="btn btn-primary">Issue Token</button>
+		</div>
+	</form>
+}
+
+// NewTokenResult renders the issued token row with the plaintext token shown once.
+// This is the htmx response after POST /admin/tokens/{accountID}.
+//
+// WHY show rawToken only here:
+//   Token values are never stored in the DB — only their SHA-256 hash is persisted (SEC-02).
+//   This is the only moment the raw JWT is available. After the operator navigates away or
+//   reloads, the plaintext token is gone. This follows the same "shown once" pattern as
+//   GitHub personal access tokens and AWS secret keys.
+templ NewTokenResult(tok token.TokenRecord, rawToken string) {
+	@TokenRow(tok)
+	<tr>
+		<td colspan="8" class="token-reveal">
+			<strong>Token (copy now — shown once):</strong>
+			<code>{ rawToken }</code>
+		</td>
+	</tr>
+}
+
+// labelOrDash returns the label string or an em-dash for nil/empty labels.
+func labelOrDash(label *string) string {
+	if label == nil || *label == "" {
+		return "\u2014"
+	}
+	return *label
+}
+
+// expiresStr formats the optional expiry time for display.
+func expiresStr(tok token.TokenRecord) string {
+	if tok.ExpiresAt == nil {
+		return "never"
+	}
+	return tok.ExpiresAt.Format("2006-01-02")
+}

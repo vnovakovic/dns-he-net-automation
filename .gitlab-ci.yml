@@ -1,0 +1,285 @@
+# Custom CI pipeline — replaces Auto DevOps.
+#
+# WHY custom pipeline (not Auto DevOps):
+#   Auto DevOps assumes the project builds a Docker image via /build/build.sh.
+#   This project is a Go binary, not a container. Auto DevOps tries to push to
+#   the GitLab Container Registry and fails when the Docker client is outdated.
+#
+# WHY no templ generate step:
+#   The *_templ.go generated files are committed to the repo — go build works
+#   without regenerating them in CI.
+#
+# WHY GOMODCACHE=/tmp/gomod:
+#   The runner's overlay filesystem for /go is part of the Docker image layer
+#   and has very limited free space. /tmp is a separate tmpfs mount with its own
+#   allocation — module downloads succeed there. Without this, go build fails with
+#   "mkdir /go/pkg: no space left on device".
+#
+# WHY no cache config:
+#   The runner log showed "No URL provided, cache will not be downloaded from shared
+#   cache server" — the shared cache server is not configured for this runner.
+#   Keeping a cache stanza that does nothing just adds noise and a slow cache-check step.
+#
+# WHY include runner-cleanup.yml:
+#   GitLab's "Run pipeline" UI and API always use the project's configured CI config
+#   path (.gitlab-ci.yml) — there is no per-trigger config override. Including the
+#   cleanup file here makes the manual cleanup job available in every pipeline without
+#   requiring a project-settings change. The job runs only when manually triggered
+#   (when: manual) so it never fires during normal build/test runs.
+#
+# VERSION RESOLUTION (shared across build/package jobs via .resolve-version anchor):
+#   1. If $VERSION CI variable is set manually → use as-is (allows ad-hoc builds)
+#   2. Else if $CI_COMMIT_TAG matches v* → strip leading 'v' (v1.2.0 → 1.2.0)
+#   3. Else → read VERSION file + append -$CI_COMMIT_SHORT_SHA (dev build, e.g. 0.1.0-abc1234)
+#   This strategy means release builds are clean semver, dev builds are traceable to a commit.
+
+include:
+  - local: .gitlab/ci/runner-cleanup.yml
+  # GitLab Container Scanning template — runs Trivy against the pushed image and
+  # produces a CycloneDX SBOM report visible under Security → Dependency List.
+  # WHY include here (not auto DevOps): we use a custom pipeline; the template must
+  # be explicitly included. The job is overridden below to point at our Harbor image
+  # and run only after package-docker completes.
+  - template: Security/Container-Scanning.gitlab-ci.yml
+
+stages:
+  - build
+  - test
+  - package
+  - scan
+  - cleanup
+
+# ── Shared version-resolution script fragment ───────────────────────────────
+#
+# WHY YAML anchor (not a before_script at top level):
+#   A top-level before_script runs for ALL jobs including runner-cleanup.yml jobs
+#   that don't need versioning. Anchors let us opt in only where needed.
+#
+# WHY export (not just assignment):
+#   GitLab CI runs each script line in a new shell unless they share the same
+#   `script:` block. `export VERSION=...` ensures downstream script lines within
+#   the same job can read the variable.
+.resolve-version: &resolve-version
+  - |
+    if [ -z "$VERSION" ]; then
+      if echo "$CI_COMMIT_TAG" | grep -qE '^v[0-9]'; then
+        VERSION=$(echo "$CI_COMMIT_TAG" | sed 's/^v//')
+      else
+        VERSION=$(cat VERSION)-$CI_COMMIT_SHORT_SHA
+      fi
+    fi
+    export VERSION
+  - echo "Building version $VERSION"
+
+# ── Build stage ─────────────────────────────────────────────────────────────
+
+build-linux:
+  stage: build
+  image: golang:1.25
+  variables:
+    GOMODCACHE: /tmp/gomod
+    GOOS: linux
+    GOARCH: amd64
+    CGO_ENABLED: "0"
+  before_script:
+    - *resolve-version
+  script:
+    - go build -o dnshenet-server-linux-amd64 ./cmd/server
+  artifacts:
+    name: "dnshenet-server-linux-amd64-$VERSION"
+    paths:
+      - dnshenet-server-linux-amd64
+    expire_in: 7 days
+
+build-windows:
+  stage: build
+  image: golang:1.25
+  variables:
+    GOMODCACHE: /tmp/gomod
+    GOOS: windows
+    GOARCH: amd64
+    CGO_ENABLED: "0"
+  before_script:
+    - *resolve-version
+  script:
+    - go build -o dnshenet-server-windows-amd64.exe ./cmd/server
+  artifacts:
+    paths:
+      - dnshenet-server-windows-amd64.exe
+    expire_in: 1 hour
+
+# ── Test stage ───────────────────────────────────────────────────────────────
+
+test:
+  stage: test
+  image: golang:1.25
+  variables:
+    GOMODCACHE: /tmp/gomod
+  script:
+    - go test ./...
+
+# ── Package stage ────────────────────────────────────────────────────────────
+
+# WHY package-installer uses amake/innosetup:
+#   amake/innosetup is a pre-built Docker Hub image containing Wine + Inno Setup 6
+#   (ISCC.exe) in headless CLI mode. No X11 display is required — Wine runs the
+#   Windows compiler via the CLI entry point without any GUI surface.
+#
+# WHY entrypoint: [""] on amake/innosetup:
+#   The image sets ENTRYPOINT ["ISCC.exe"], so without an override GitLab CI's
+#   before_script shell commands (the version-resolve anchor) get passed as
+#   arguments to ISCC.exe, which rejects them with "Unknown option: -c".
+#   Resetting the entrypoint to empty lets the default shell run, and ISCC.exe
+#   is still available in PATH via the Wine wrapper script bundled in the image.
+#
+# PREVIOUSLY TRIED: image: amake/innosetup (no entrypoint override)
+#   Pipeline failed: ISCC.exe received the bash -c "..." fragment as its first
+#   argument and exited with "Unknown option: -c". Discovered from job trace.
+#
+# WHY /DMyAppVersion=... passed to ISCC:
+#   The .iss script uses #ifdef MyAppVersion to set AppVersion, defaulting to "dev"
+#   for local builds. Passing the define from CI injects the resolved semver into
+#   the installer so Programs & Features shows the correct version string.
+#
+# WHY rules trigger on tag OR master OR $VERSION set:
+#   - Tags: release builds that should always produce a versioned artifact
+#   - master: integration builds to catch regressions before tagging
+#   - $VERSION set: allows ad-hoc builds from "Run pipeline" UI with a custom version
+package-installer:
+  stage: package
+  image:
+    name: amake/innosetup
+    entrypoint: [""]
+  needs:
+    - build-windows
+  before_script:
+    - *resolve-version
+  script:
+    # Rename to the filename expected by the .iss [Files] section
+    - cp dnshenet-server-windows-amd64.exe dnshenet-server.exe
+    # WHY "iscc" not "ISCC.exe": amake/innosetup ENTRYPOINT is the shell script
+    # "iscc" (lowercase, no .exe) in /usr/local/bin. With entrypoint:[""] the
+    # shell needs to call it by its actual Linux name.
+    - iscc /DMyAppVersion=$VERSION installer/dnshenet-server.iss
+  artifacts:
+    name: "dnshenet-server-installer-$VERSION"
+    paths:
+      - dnshenet-server-installer.exe
+    expire_in: 7 days
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$VERSION'
+
+# WHY package-docker uses host Docker socket (unix:///var/run/docker.sock):
+#   The runner on dus-runner01 mounts the host Docker socket rather than using
+#   Docker-in-Docker (dind). This was confirmed working by the existing cleanup job.
+#   DinD requires privileged mode and is slower; host socket reuse is the proven approach.
+#
+# WHY :latest is only pushed on master or tag (not every branch):
+#   :latest should always point to the most recent stable/integration build.
+#   Pushing :latest from feature branches would cause it to point to unreviewed code,
+#   breaking anyone who pulls :latest expecting a stable image.
+#
+# WHY $HARBOR_USERNAME / $HARBOR_PASSWORD (not hardcoded):
+#   Credentials are stored as protected+masked GitLab CI variables so they never
+#   appear in job logs or the repository. Set them in:
+#   Project → Settings → CI/CD → Variables
+#
+# WHY plain docker build (not docker buildx --sbom=true):
+#   docker buildx --sbom=true produces a BuildKit OCI attestation manifest (the JSON
+#   index with "vnd.docker.reference.type: attestation-manifest"). Harbor receives this
+#   format but does NOT render it as "SBOM details" in the UI — it requires its own
+#   Trivy-generated SBOM stored as a Harbor accessor artifact.
+#   Confirmed by comparison: apache2 shows "SBOM details" because Harbor's Trivy scanner
+#   generated the SBOM via its own pipeline, not via a BuildKit attestation.
+#   Harbor SBOM is triggered via API after push (see harbor-sbom step below).
+#
+# WHY Harbor API SBOM trigger (not Harbor auto-scan project setting):
+#   The auto-scan project setting only triggers vulnerability scanning, not SBOM
+#   generation. SBOM generation requires a separate API call with scan_type=sbom.
+#   Triggering it from CI ensures SBOM is always generated for every pushed image
+#   without requiring manual clicks in the Harbor UI.
+package-docker:
+  stage: package
+  image: docker:25
+  variables:
+    DOCKER_HOST: unix:///var/run/docker.sock
+    IMAGE: harbor.e2.network/provision/dns-he-net-automation
+    HARBOR_API: https://harbor.e2.network/api/v2.0
+    HARBOR_PROJECT: provision
+    HARBOR_REPO: dns-he-net-automation
+  before_script:
+    - *resolve-version
+  script:
+    - docker login -u "$HARBOR_USERNAME" -p "$HARBOR_PASSWORD" harbor.e2.network
+    # WHY DOCKER_BUILDKIT=0: Docker 25 enables BuildKit by default which auto-generates
+    # provenance attestation and produces a manifest list (OCI image index). When the same
+    # tag already exists in Harbor as a single-manifest image, pushing a manifest list fails
+    # with "already exists". Disabling BuildKit produces a plain single-manifest image
+    # which pushes cleanly regardless of what is already in Harbor.
+    - DOCKER_BUILDKIT=0 docker build -t $IMAGE:$VERSION .
+    # WHY || true on push: if this commit's tag was already pushed by an auto-triggered
+    # pipeline, the push is a no-op conflict. We continue to ensure the Harbor SBOM
+    # trigger always runs, even on a re-run of the same commit.
+    - docker push $IMAGE:$VERSION || true
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "master" ] || [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag $IMAGE:$VERSION $IMAGE:latest
+        docker push $IMAGE:latest || true
+      fi
+    # ── Trigger Harbor native SBOM generation via Trivy ──────────────────────
+    # Harbor stores the SBOM as an accessor artifact attached to the image digest.
+    # This is what makes the "SBOM details" link appear in the Harbor UI — identical
+    # to clicking the "GENERATE SBOM" button manually.
+    # We trigger it for $VERSION; Harbor automatically applies it to :latest as well
+    # since they share the same digest.
+    - apk add --no-cache curl
+    - |
+      ENCODED_REPO=$(echo "$HARBOR_REPO" | sed 's|/|%2F|g')
+      # Trigger vulnerability scan
+      curl -sk -o /dev/null -w "Vuln scan status: %{http_code}\n" \
+        -X POST \
+        -u "$HARBOR_USERNAME:$HARBOR_PASSWORD" \
+        -H "Content-Type: application/json" \
+        "$HARBOR_API/projects/$HARBOR_PROJECT/repositories/$ENCODED_REPO/artifacts/$VERSION/scan"
+      # Trigger SBOM generation (Harbor 2.8+)
+      curl -sk -o /dev/null -w "SBOM gen status: %{http_code}\n" \
+        -X POST \
+        -u "$HARBOR_USERNAME:$HARBOR_PASSWORD" \
+        -H "Content-Type: application/json" \
+        -d '{"scan_type":"sbom"}' \
+        "$HARBOR_API/projects/$HARBOR_PROJECT/repositories/$ENCODED_REPO/artifacts/$VERSION/scan"
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$VERSION'
+
+# ── Scan stage ───────────────────────────────────────────────────────────────
+
+# Override the GitLab Container Scanning template job to:
+#   - target our Harbor image (not the GitLab registry)
+#   - run only after package-docker succeeds
+#   - apply the same branch/tag rules as the docker build
+#
+# WHY CS_IMAGE uses :latest (not $VERSION):
+#   The container_scanning job runs after package-docker which always tags :latest
+#   on master/tag pushes. Using :latest avoids passing $VERSION across job boundaries
+#   via artifacts or dotenv — the tag we just pushed is always reachable as :latest.
+#
+# WHY CS_REGISTRY_USER / CS_REGISTRY_PASSWORD (not HARBOR_USERNAME directly):
+#   The Container Scanning template reads these specific variable names to authenticate
+#   against a private registry. HARBOR_USERNAME/PASSWORD are reused as values so only
+#   one set of credentials needs to be stored in GitLab CI variables.
+container_scanning:
+  stage: scan
+  needs:
+    - package-docker
+  variables:
+    CS_IMAGE: harbor.e2.network/provision/dns-he-net-automation:latest
+    CS_REGISTRY_USER: $HARBOR_USERNAME
+    CS_REGISTRY_PASSWORD: $HARBOR_PASSWORD
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$VERSION'

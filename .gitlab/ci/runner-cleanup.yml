@@ -1,0 +1,93 @@
+# Runner disk cleanup pipeline — manual trigger only.
+#
+# HOW TO RUN:
+#   GitLab UI → CI/CD → Pipelines → Run pipeline →
+#   Set "CI config path" to .gitlab/ci/runner-cleanup.yml
+#   (or use default path and trigger via API with this file as config)
+#
+# WHY manual-only (workflow rules):
+#   Cleanup is a maintenance operation, not part of the normal build/test
+#   cycle. workflow rules prevent this file from running on every push if
+#   it is ever accidentally set as the default CI config path.
+#
+# RUNNER TAGS (current state — all three runners on dus-runner01 share tags):
+#   All runners on 10.201.1.159 have tags: dus-runner01, docker, linux, ubuntu, shared, dus
+#   They also share the same Docker daemon and root filesystem, so one cleanup
+#   job on any of them is sufficient to reclaim space for all.
+#
+#   To target a specific runner precisely, add a unique tag via:
+#     GitLab Admin → Runners → Edit runner → Tags  (e.g. "dus-runner01-docker-1")
+#   Then add a separate job using that unique tag.
+#
+# WHY docker system prune -af (not just image prune):
+#   -a removes ALL unused images (not just dangling ones).
+#   Stopped containers and unused networks are also removed — they accumulate
+#   from failed CI jobs and contribute to disk exhaustion.
+#
+# WHY volume prune separate (not --volumes flag in system prune):
+#   Makes the intent explicit and easier to audit in the job log.
+#   Volumes could hold intentional persistent state — separating this step
+#   makes it easy to comment out if needed.
+#
+# WHY journal vacuum:
+#   systemd journal accumulates on busy runners and can consume several GB.
+#   Vacuuming to 100MB removes old entries while keeping recent logs.
+#
+# WHY apt clean:
+#   apt package cache in /var/cache/apt/archives grows after OS updates.
+#   Cleaning it reclaims space without affecting installed packages.
+
+# WHY no workflow block here (moved to standalone note):
+#   When this file was standalone it used workflow: rules to restrict execution
+#   to web/api triggers. Now it is included from .gitlab-ci.yml — the parent
+#   pipeline's workflow controls when the pipeline runs. The cleanup job itself
+#   uses "when: manual" which is sufficient to prevent accidental execution.
+
+stages:
+  - cleanup
+
+# Cleans dus-runner01 (10.201.1.159) — all docker runners on this host share
+# the same Docker daemon and root filesystem, so one job covers all of them.
+cleanup-dus-runner01:
+  stage: cleanup
+  image: docker:25
+  tags:
+    - dus-runner01
+  # WHY DOCKER_HOST unix socket: the Docker executor mounts the host socket
+  # into the job container so docker CLI commands run against the host daemon.
+  # This is what allows us to prune host-level images and volumes.
+  variables:
+    DOCKER_HOST: unix:///var/run/docker.sock
+  before_script:
+    - echo "=== Disk usage BEFORE cleanup ==="
+    - df -h /
+    - echo ""
+    - echo "=== Docker disk usage BEFORE ==="
+    - docker system df
+    - echo ""
+  script:
+    - echo "--- Removing all unused Docker images ---"
+    - docker image prune -af
+    - echo ""
+    - echo "--- Removing stopped containers ---"
+    - docker container prune -f
+    - echo ""
+    - echo "--- Removing unused networks ---"
+    - docker network prune -f
+    - echo ""
+    - echo "--- Removing unused volumes ---"
+    - docker volume prune -f
+    - echo ""
+    - echo "--- Clearing apt cache ---"
+    - apt-get clean 2>/dev/null || true
+    - echo ""
+    - echo "--- Vacuuming systemd journal (keep last 100MB) ---"
+    - nsenter -t 1 -m -- journalctl --vacuum-size=100M 2>/dev/null || journalctl --vacuum-size=100M 2>/dev/null || echo "journal vacuum skipped (no host PID namespace access)"
+    - echo ""
+    - echo "=== Disk usage AFTER cleanup ==="
+    - df -h /
+    - echo ""
+    - echo "=== Docker disk usage AFTER ==="
+    - docker system df
+  when: manual
+  allow_failure: false
